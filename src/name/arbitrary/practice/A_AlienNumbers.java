@@ -1,4 +1,4 @@
-package name.arbitrary;
+package name.arbitrary.practice;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
@@ -7,7 +7,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Main {
+public class A_AlienNumbers {
 
     public static void main(String[] args) {
         BufferedReader input = getInput(args[0]);
