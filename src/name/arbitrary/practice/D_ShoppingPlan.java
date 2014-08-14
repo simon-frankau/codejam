@@ -108,7 +108,6 @@ public class D_ShoppingPlan {
     Map<State, State> queuedLookup = new HashMap<State, State>();
     Set<State> processed = new HashSet<State>();
 
-    // TODO: General plan is dynamic programming over the things we have and which store/home we're at.
     private String runCase(BufferedReader input) {
         String parts[] = getString(input).split(" ");
         int numItems = Integer.parseInt(parts[0]);
@@ -123,9 +122,9 @@ public class D_ShoppingPlan {
             addStore(getString(input));
         }
 
-        solve();
+        double result = solve().spent;
 
-        return dumpState();
+        return String.format("%.7f", result);
     }
 
     private State solve() {
@@ -133,7 +132,7 @@ public class D_ShoppingPlan {
 
         while (!toProcess.isEmpty()) {
             State next = toProcess.remove();
-            System.out.println("Running " + next);
+            // System.err.println("Running " + next);
             if (next.location == null && next.basket == target) {
                 return next;
             }
@@ -147,25 +146,25 @@ public class D_ShoppingPlan {
     }
 
     private void enqueueState(State state) {
-        System.out.println("Enqueuing " + state);
+        // System.err.println("Enqueuing " + state);
         State zeroedState = new State(state.location, state.basket, 0.0);
         if (processed.contains(zeroedState)) {
-            System.out.println("Already processed");
+            // System.err.println("Already processed");
             return;
         }
         State existing = queuedLookup.get(zeroedState);
         if (existing != null) {
             if (existing.spent > state.spent) {
-                System.out.println("Better route " + existing.spent + " vs. " + state.spent);
+                // System.err.println("Better route " + existing.spent + " vs. " + state.spent);
                 toProcess.remove(existing);
                 queuedLookup.remove(zeroedState);
                 toProcess.add(state);
                 queuedLookup.put(zeroedState, state);
             } else {
-                System.out.println("Worse route");
+                // System.err.println("Worse route");
             }
         } else {
-            System.out.println("New state");
+            // System.err.println("New state");
             toProcess.add(state);
             queuedLookup.put(zeroedState, state);
         }
