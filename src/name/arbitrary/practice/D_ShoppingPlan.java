@@ -21,7 +21,9 @@ public class D_ShoppingPlan {
     }
 
     class Store {
-
+        Store(double x, double y, Map<String, Double> prices) {
+            // TODO!
+        }
     };
 
     double priceOfGas;
@@ -44,6 +46,8 @@ public class D_ShoppingPlan {
         for (int i = 0; i < numStores; ++i) {
             addStore(getString(input));
         }
+
+        return "FIXME";
     }
 
     private void addStore(String string) {
@@ -51,7 +55,7 @@ public class D_ShoppingPlan {
         double x = Double.parseDouble(parts[0]);
         double y = Double.parseDouble(parts[1]);
         Map<String, Double> prices = new HashMap<String, Double>();
-        for (int i = 2; i < parts.length) {
+        for (int i = 2; i < parts.length; i++) {
             String bits[] = string.split(":");
             prices.put(bits[0], Double.parseDouble(bits[1]));
         }
