@@ -21,13 +21,39 @@ public class D_ShoppingPlan {
     }
 
     class Store {
-        Store(double x, double y, Map<String, Double> prices) {
-            // TODO!
+        private final double x;
+        private final double y;
+        private final Map<Integer, Double> prices;
+        Store(double x, double y, Map<Integer, Double> prices) {
+            this.x = x;
+            this.y = y;
+            this.prices = prices;
+        }
+
+        double costTo(Store store) {
+            double x2 = store != null ? store.x : 0.0;
+            double y2 = store != null ? store.y : 0.0;
+            return priceOfGas * Math.sqrt((x2 - x) * (x2 - x) + (y2 - y) * (y2 - y));
+        }
+
+        public String toString() {
+            StringBuffer sb = new StringBuffer();
+            sb.append(x).append(' ').append(y).append(' ');
+            for (Map.Entry<Integer, Double> entry : prices.entrySet()) {
+                sb.append(revShoppingList.get(entry.getKey())).append(':').append(entry.getValue()).append(' ');
+            }
+            return sb.toString();
         }
     };
 
+    // Items will be represented with a bit mask. This holds the mapping.
+    Map<String, Integer> shoppingList = new HashMap<String, Integer>();
+    Map<Integer, String> revShoppingList = new HashMap<Integer, String>();
+
+    // Bitmask for perishable items.
+    int perishables;
+
     double priceOfGas;
-    Set<String> shoppingList = new HashSet<String>(); // TODO: Make map to perishable boolean
     Set<Store> stores = new HashSet<Store>();
 
     // TODO: General plan is dynamic programming over the things we have and which store/home we're at.
@@ -39,25 +65,57 @@ public class D_ShoppingPlan {
 
         String items[] = getString(input).split(" ");
         assert (items.length == numItems);
-        for (String item : items) {
-            shoppingList.add(item);
-        }
+        constructShoppingList(items);
 
         for (int i = 0; i < numStores; ++i) {
             addStore(getString(input));
         }
 
-        return "FIXME";
+        return dumpState();
+    }
+
+    private String dumpState() {
+        StringBuffer sb = new StringBuffer();
+        sb.append(shoppingList.size()).append(' ').append(stores.size()).append(' ').append(priceOfGas).append('\n');
+        for (Map.Entry<String, Integer> entry : shoppingList.entrySet()) {
+            sb.append(entry.getKey());
+            if ((entry.getValue() & perishables) != 0) {
+                sb.append('!');
+            }
+            sb.append(' ');
+        }
+        sb.append('\n');
+        for (Store store : stores) {
+            sb.append(store.toString()).append('\n');
+        }
+        return sb.toString();
+    }
+
+    private void constructShoppingList(String[] items) {
+        for (int i = 0; i < items.length; i++) {
+            String item = items[i];
+            boolean isPerishable = item.endsWith("!");
+            if (isPerishable) {
+                item = item.substring(0, item.length() - 1);
+            }
+            int bit = 1 << i;
+            shoppingList.put(item, bit);
+            revShoppingList.put(bit, item);
+            if (isPerishable) {
+                perishables |= bit;
+            }
+        }
     }
 
     private void addStore(String string) {
         String parts[] = string.split(" ");
         double x = Double.parseDouble(parts[0]);
         double y = Double.parseDouble(parts[1]);
-        Map<String, Double> prices = new HashMap<String, Double>();
+        int mask = 0;
+        Map<Integer, Double> prices = new HashMap<Integer, Double>();
         for (int i = 2; i < parts.length; i++) {
-            String bits[] = string.split(":");
-            prices.put(bits[0], Double.parseDouble(bits[1]));
+            String bits[] = parts[i].split(":");
+            prices.put(shoppingList.get(bits[0]), Double.parseDouble(bits[1]));
         }
         stores.add(new Store(x, y, prices)); // TODO
     }
