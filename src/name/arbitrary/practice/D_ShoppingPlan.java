@@ -157,6 +157,8 @@ public class D_ShoppingPlan {
     Set<State> processed = new HashSet<State>();
 
     private String runCase(BufferedReader input) {
+        // NB: Special-casing gas-price == 0 is clear and easy, but the code runs fast enough without that optimisation.
+
         String parts[] = getString(input).split(" ");
         int numItems = Integer.parseInt(parts[0]);
         int numStores = Integer.parseInt(parts[1]);
