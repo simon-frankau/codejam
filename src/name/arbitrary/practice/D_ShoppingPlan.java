@@ -1,5 +1,7 @@
 package name.arbitrary.practice;
 
+import com.sun.tools.javac.util.Pair;
+
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -20,8 +22,8 @@ public class D_ShoppingPlan {
     class Store {
         private final double x;
         private final double y;
-        private final Map<Integer, Double> prices;
-        Store(double x, double y, Map<Integer, Double> prices) {
+        private final List<Pair<Integer, Double>> prices;
+        Store(double x, double y, List<Pair<Integer, Double>> prices) {
             this.x = x;
             this.y = y;
             this.prices = prices;
@@ -36,8 +38,8 @@ public class D_ShoppingPlan {
         public String toString() {
             StringBuffer sb = new StringBuffer();
             sb.append(x).append(' ').append(y).append(' ');
-            for (Map.Entry<Integer, Double> entry : prices.entrySet()) {
-                sb.append(revShoppingList.get(entry.getKey())).append(':').append(entry.getValue()).append(' ');
+            for (Pair<Integer, Double> entry : prices) {
+                sb.append(revShoppingList.get(entry.fst)).append(':').append(entry.snd).append(' ');
             }
             return sb.toString();
         }
@@ -177,7 +179,7 @@ public class D_ShoppingPlan {
     }
 
     private void enqueueNextSteps(State state) {
-        List<State> shopped = Collections.singletonList(state); // TODO!
+        List<State> shopped = doShopping(state);
 
         if (state.location != null) {
             for (State newState : shopped) {
@@ -196,6 +198,29 @@ public class D_ShoppingPlan {
                 }
             }
         }
+    }
+
+    private List<State> doShopping(State state) {
+        List<State> result = Collections.singletonList(state);
+
+        // No shopping at home!
+        if (state.location == null) {
+            return result;
+        }
+
+        for (Pair<Integer, Double> price : state.location.prices) {
+            if ((state.basket & price.fst) == 0) {
+                // Not bought yet.
+                List<State> newResult = new ArrayList<State>(result.size() * 2);
+                for (State s : result) {
+                    newResult.add(s);
+                    newResult.add(new State(s.location, s.basket | price.fst, s.spent + price.snd));
+                }
+                result = newResult;
+            }
+        }
+
+        return result;
     }
 
     private String dumpState() {
@@ -237,12 +262,12 @@ public class D_ShoppingPlan {
         double x = Double.parseDouble(parts[0]);
         double y = Double.parseDouble(parts[1]);
         int mask = 0;
-        Map<Integer, Double> prices = new HashMap<Integer, Double>();
+        List<Pair<Integer, Double>> prices = new ArrayList<Pair<Integer, Double>>();
         for (int i = 2; i < parts.length; i++) {
             String bits[] = parts[i].split(":");
-            prices.put(shoppingList.get(bits[0]), Double.parseDouble(bits[1]));
+            prices.add(Pair.of(shoppingList.get(bits[0]), Double.parseDouble(bits[1])));
         }
-        stores.add(new Store(x, y, prices)); // TODO
+        stores.add(new Store(x, y, prices));
     }
 
     private static String getString(BufferedReader input) {
