@@ -112,7 +112,18 @@ public class D_ShoppingPlan {
 
         @Override
         public int compareTo(SpentState state) {
-            return Double.compare(spent, state.spent);
+            int cmp = Double.compare(spent, state.spent);
+            if (cmp != 0) return cmp;
+            cmp = basket - state.basket;
+            if (cmp != 0) return cmp;
+            if (location == state.location) return 0;
+            if (location == null) return -1;
+            if (state.location == null) return 1;
+            cmp = Double.compare(location.x, state.location.x);
+            if (cmp != 0) return cmp;
+            cmp = Double.compare(location.y, state.location.y);
+            if (cmp != 0) return cmp;
+            return 0;
         }
 
         @Override
@@ -141,7 +152,7 @@ public class D_ShoppingPlan {
         }
     }
 
-    PriorityQueue<SpentState> toProcess = new PriorityQueue<SpentState>();
+    TreeSet<SpentState> toProcess = new TreeSet<SpentState>();
     Map<State, SpentState> queuedLookup = new HashMap<State, SpentState>();
     Set<State> processed = new HashSet<State>();
 
@@ -171,7 +182,8 @@ public class D_ShoppingPlan {
             if (processed.size() % 100 == 0) {
                 System.err.println(toProcess.size() + " " + processed.size());
             }
-            SpentState next = toProcess.remove();
+            SpentState next = toProcess.first();
+            toProcess.remove(next);
             // System.err.println("Running " + next);
             if (next.location == null && next.basket == target) {
                 return next;
