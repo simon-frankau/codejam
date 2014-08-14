@@ -15,6 +15,7 @@ public class D_ShoppingPlan {
         int numLines = Integer.parseInt(getString(input));
         for (int i = 0; i < numLines; ++i) {
             D_ShoppingPlan test = new D_ShoppingPlan();
+            System.err.println("******* " + (i+1) + " *******");
             System.out.println("Case #" + (i+1) + ": " + test.runCase(input));
         }
     }
@@ -131,6 +132,9 @@ public class D_ShoppingPlan {
         toProcess.add(new State(null, 0, 0.0));
 
         while (!toProcess.isEmpty()) {
+            if (processed.size() % 100 == 0) {
+                System.err.println(toProcess.size() + " " + processed.size());
+            }
             State next = toProcess.remove();
             // System.err.println("Running " + next);
             if (next.location == null && next.basket == target) {
@@ -138,8 +142,8 @@ public class D_ShoppingPlan {
             }
             State zeroedState = new State(next.location, next.basket, 0.0);
             processed.add(zeroedState);
-            enqueueNextSteps(next);
             queuedLookup.remove(zeroedState);
+            enqueueNextSteps(next);
         }
 
         return null;
@@ -178,7 +182,7 @@ public class D_ShoppingPlan {
     }
 
     private void enqueueNextSteps(State state) {
-        List<State> shopped = doShopping(state);
+        List<State> shopped = filterStates(doShopping(state));
 
         if (state.location != null) {
             for (State newState : shopped) {
@@ -197,6 +201,26 @@ public class D_ShoppingPlan {
                 }
             }
         }
+    }
+
+    // If we have already processed a state, or have a better alternative, no point trying to plan onwards journeys...
+    private List<State> filterStates(List<State> states) {
+        List<State> result = new ArrayList<State>(states.size());
+        for (State state : states) {
+            State zeroedState = new State(state.location, state.basket, 0.0);
+            if (processed.contains(zeroedState) && state.location != null) {
+                // Didn't make any progress
+                // (NB: Allowed to not make any progress at home, en route to somewhere else)
+                continue;
+            }
+            State currState = queuedLookup.get(zeroedState);
+            if (currState != null && currState.spent <= state.spent) {
+                // Done better already, don't bother.
+                continue;
+            }
+            result.add(state);
+        }
+        return result;
     }
 
     private List<State> doShopping(State state) {
