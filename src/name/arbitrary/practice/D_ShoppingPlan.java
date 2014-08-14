@@ -4,10 +4,7 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public class D_ShoppingPlan {
 
@@ -52,9 +49,62 @@ public class D_ShoppingPlan {
 
     // Bitmask for perishable items.
     int perishables;
+    // And target
+    int target;
 
     double priceOfGas;
     Set<Store> stores = new HashSet<Store>();
+
+    // NB: Null Store equals home.
+    class State implements Comparable<State> {
+        State(Store location, int basket, double spent) {
+            this.location = location;
+            this.basket = basket;
+            this.spent = spent;
+        }
+        public Store location;
+        public int basket;
+        public double spent;
+
+        @Override
+        public String toString() {
+            return basket + " " + spent + " " + location;
+        }
+
+        @Override
+        public int compareTo(State state) {
+            return Double.compare(spent, state.spent);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            State state = (State) o;
+
+            if (basket != state.basket) return false;
+            if (Double.compare(state.spent, spent) != 0) return false;
+            if (location != null ? !location.equals(state.location) : state.location != null) return false;
+
+            return true;
+        }
+
+        @Override
+        public int hashCode() {
+            int result;
+            long temp;
+            result = location != null ? location.hashCode() : 0;
+            result = 31 * result + basket;
+            temp = Double.doubleToLongBits(spent);
+            result = 31 * result + (int) (temp ^ (temp >>> 32));
+            return result;
+        }
+    }
+
+    PriorityQueue<State> toProcess = new PriorityQueue<State>();
+    Map<State, State> queuedLookup = new HashMap<State, State>();
+    Set<State> processed = new HashSet<State>();
 
     // TODO: General plan is dynamic programming over the things we have and which store/home we're at.
     private String runCase(BufferedReader input) {
@@ -71,7 +121,81 @@ public class D_ShoppingPlan {
             addStore(getString(input));
         }
 
+        solve();
+
         return dumpState();
+    }
+
+    private State solve() {
+        toProcess.add(new State(null, 0, 0.0));
+
+        while (!toProcess.isEmpty()) {
+            State next = toProcess.remove();
+            System.out.println("Running " + next);
+            if (next.location == null && next.basket == target) {
+                return next;
+            }
+            State zeroedState = new State(next.location, next.basket, 0.0);
+            processed.add(zeroedState);
+            enqueueNextSteps(next);
+            queuedLookup.remove(zeroedState);
+        }
+
+        return null;
+    }
+
+    private void enqueueState(State state) {
+        System.out.println("Enqueuing " + state);
+        State zeroedState = new State(state.location, state.basket, 0.0);
+        if (processed.contains(zeroedState)) {
+            System.out.println("Already processed");
+            return;
+        }
+        State existing = queuedLookup.get(zeroedState);
+        if (existing != null) {
+            if (existing.spent > state.spent) {
+                System.out.println("Better route " + existing.spent + " vs. " + state.spent);
+                toProcess.remove(existing);
+                queuedLookup.remove(zeroedState);
+                toProcess.add(state);
+                queuedLookup.put(zeroedState, state);
+            } else {
+                System.out.println("Worse route");
+            }
+        } else {
+            System.out.println("New state");
+            toProcess.add(state);
+            queuedLookup.put(zeroedState, state);
+        }
+    }
+
+    private State goTo(State state, Store location) {
+        double gasPrice = state.location == null ?
+                (location == null ? 0.0 : location.costTo(state.location)) :
+                state.location.costTo(location);
+        return new State(location, state.basket, state.spent + gasPrice);
+    }
+
+    private void enqueueNextSteps(State state) {
+        List<State> shopped = Collections.singletonList(state); // TODO!
+
+        if (state.location != null) {
+            for (State newState : shopped) {
+                enqueueState(goTo(newState, null));
+            }
+        }
+
+        for (State newState : shopped) {
+            int boughtItems = newState.basket - state.basket;
+            boolean havePerishables = (boughtItems & perishables) != 0;
+            if (!havePerishables) {
+                for (Store store : stores) {
+                    if (store != state.location) {
+                        enqueueState(goTo(newState, store));
+                    }
+                }
+            }
+        }
     }
 
     private String dumpState() {
@@ -105,6 +229,7 @@ public class D_ShoppingPlan {
                 perishables |= bit;
             }
         }
+        target = (1 << items.length) - 1;
     }
 
     private void addStore(String string) {
