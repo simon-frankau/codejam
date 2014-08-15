@@ -5,7 +5,7 @@ import name.arbitrary.CodeJamBase;
 import java.util.HashSet;
 import java.util.Set;
 
-public class A_MagicTrick extends CodeJamBase{
+public class A_MagicTrick extends CodeJamBase {
     private final static int NUM_LINES = 4;
 
     A_MagicTrick(String fileName) {
