@@ -5,11 +5,9 @@ import name.arbitrary.CodeJamBase;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * Created by sgf on 15/08/2014.
- */
 public class A_MagicTrick extends CodeJamBase{
     private final static int NUM_LINES = 4;
+
     A_MagicTrick(String fileName) {
         super(fileName);
     }
