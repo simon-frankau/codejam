@@ -6,7 +6,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-// 11:35 - 11:40, 14:08 - 14:18, 14:20 - 14:24, 14:33 -
+// 11:35 - 11:40, 14:08 - 14:18, 14:20 - 14:24, 14:33 - 14:48
+// 34 minutes, with extra random thinking time between while handling children etc. ...
 public class A_ChargingChaos extends CodeJamBase {
     A_ChargingChaos(String fileName) {
         super(fileName);
