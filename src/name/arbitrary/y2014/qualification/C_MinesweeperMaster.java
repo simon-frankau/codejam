@@ -147,8 +147,6 @@ public class C_MinesweeperMaster extends CodeJamBase {
         } else {
             solveFiddlyCase(map, toClear);
         }
-
-        // TODO: All the other cases!
     }
 
     private void solveLotsCleared(char[][] map, int rows, int cols) {
@@ -165,12 +163,42 @@ public class C_MinesweeperMaster extends CodeJamBase {
         // Special case
         if (cols == 1) {
             map[rows][1] = '.';
-            map[0][map[0].length - 1] = '.';
+            map[rows - 1][map[rows - 1].length - 1] = '*';
         }
     }
 
-    private void solveFiddlyCase(char[][] map, int toClear) {
-        // TODO
+    private void solveFiddlyCase(char[][] map, int toClear) throws ImpossibleException {
+        if (toClear < 4 || toClear == 5 || toClear == 7) {
+            throw new ImpossibleException();
+        }
+        map[0][0] = map[0][1] = map[1][0] = map[1][1] = '.';
+        if (toClear == 4) {
+            return;
+        }
+        map[0][2] = map[1][2] = '.';
+        if (toClear == 6) {
+            return;
+        }
+        map[2][0] = map[2][1] = '.';
+        toClear -= 8;
+
+        int idx = 2;
+        while (toClear >= 3) {
+            map[0][idx+1] = '.';
+            map[1][idx+1] = '.';
+            map[2][idx]   = '.';
+            idx++;
+            toClear -= 3;
+        }
+        switch (toClear) {
+            case 2:
+                map[0][idx+1] = '.';
+                map[1][idx+1] = '.';
+                break;
+            case 1:
+                map[2][idx]   = '.';
+                break;
+        }
     }
 
     private String printNormal(char[][] map) {
