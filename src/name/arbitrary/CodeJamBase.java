@@ -27,6 +27,7 @@ public abstract class CodeJamBase {
     public void run() {
         int numLines = Integer.parseInt(getLine());
         for (int i = 0; i < numLines; ++i) {
+            System.err.println("Case #" + (i+1));
             System.out.println("Case #" + (i+1) + ": " + runCase());
         }
     }
