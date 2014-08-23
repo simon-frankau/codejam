@@ -26,7 +26,7 @@ public class D_TrieSharding extends CodeJamBase {
 
         System.err.println(strings);
 
-        return simpleSolution(n, strings);
+        return simpleSolution(n, strings)  + " / " + countWorstCase(n, strings);
     }
 
     private String simpleSolution(int n, List<String> strings) {
@@ -42,7 +42,7 @@ public class D_TrieSharding extends CodeJamBase {
                     newMappings.add(newMapping);
                 }
             }
-            System.err.println(newMappings);
+            // System.err.println(newMappings);
             mappings = newMappings;
         }
 
@@ -70,7 +70,7 @@ public class D_TrieSharding extends CodeJamBase {
             insertPrefices(entry.getKey(), nodeSet);
         }
 
-        System.err.println(nodeMap);
+        // System.err.println(nodeMap);
 
         int cost = 0;
         for (Set<String> nodes : nodeMap.values()) {
@@ -84,5 +84,24 @@ public class D_TrieSharding extends CodeJamBase {
         for (int i = 0; i <= key.length(); i++) {
             nodeSet.add(key.substring(0, i));
         }
+    }
+
+    // To generate the worst case count, we count the number of child strings of each node, and know that we
+    // can shard them up to n ways.
+    private String countWorstCase(int n, List<String> strings) {
+        Map<String, Integer> counts = new HashMap<String, Integer>();
+        for (String string : strings) {
+            for (int i = 0; i <= string.length(); i++) {
+                String subString = string.substring(0, i);
+                Integer oldCount = counts.get(subString);
+                counts.put(subString, (oldCount != null ? oldCount : 0) + 1);
+            }
+        }
+
+        int cost = 0;
+        for (Integer count : counts.values()) {
+            cost += Math.min(n, count);
+        }
+        return "" + cost;
     }
 }
