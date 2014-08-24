@@ -26,6 +26,10 @@ public class D_TrieSharding extends CodeJamBase {
 
         System.err.println(strings);
 
+        Trie trie = constructTrie(strings);
+        System.err.println(trie);
+        int count = countTrie(trie);
+
         return simpleSolution(n, strings)  + " / " + countWorstCase(n, strings);
     }
 
@@ -103,5 +107,50 @@ public class D_TrieSharding extends CodeJamBase {
             cost += Math.min(n, count);
         }
         return "" + cost;
+    }
+
+    // Right, let's generate the actual trie:
+    static class Trie {
+        public Map<Character, Trie> children;
+        public boolean isTerminal;
+
+        Trie() {
+            this.children = new HashMap<Character, Trie>();
+            this.isTerminal = false;
+        }
+
+        public void add(LinkedList<Character> chars) {
+            if (chars.isEmpty()) {
+                isTerminal = true;
+            } else {
+                char c = chars.removeFirst();
+                Trie child = children.get(c);
+                if (child == null) {
+                    child = new Trie();
+                    children.put(c, child);
+                }
+                child.add(chars);
+            }
+        }
+
+        public String toString() {
+            return (isTerminal ? "!!! " : "") + children;
+        }
+    }
+
+    Trie constructTrie(List<String> strings) {
+        Trie root = new Trie();
+        for (String string : strings) {
+            LinkedList<Character> path = new LinkedList<Character>();
+            for (char c : string.toCharArray()) {
+                path.add(c);
+            }
+            root.add(path);
+        }
+        return root;
+    }
+
+    private int countTrie(Trie trie) {
+        return 0;
     }
 }
