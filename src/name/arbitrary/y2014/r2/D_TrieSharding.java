@@ -1,8 +1,12 @@
 package name.arbitrary.y2014.r2;
 
+import com.sun.tools.javac.util.Pair;
 import name.arbitrary.CodeJamBase;
 
+import java.math.BigInteger;
 import java.util.*;
+
+import static com.google.common.base.MoreObjects.firstNonNull;
 
 // Brute-force solution. Still too slow to run on the small example in time!
 public class D_TrieSharding extends CodeJamBase {
@@ -28,9 +32,11 @@ public class D_TrieSharding extends CodeJamBase {
 
         Trie trie = constructTrie(strings);
         System.err.println(trie);
-        int count = countTrie(trie);
+        Pair<Integer, Long> result = countTrie(n, trie);
+        long count = mul(result.snd, permutations(n, result.fst));
 
-        return simpleSolution(n, strings)  + " / " + countWorstCase(n, strings);
+        // return simpleSolution(n, strings)
+        return countWorstCase(n, strings) + " " + count;
     }
 
     private String simpleSolution(int n, List<String> strings) {
@@ -150,7 +156,84 @@ public class D_TrieSharding extends CodeJamBase {
         return root;
     }
 
-    private int countTrie(Trie trie) {
-        return 0;
+    // First number returned is the number of child strings, second number is number of permutations.
+    private Pair<Integer, Long> countTrie(int n, Trie trie) {
+        System.err.println("Processing " + trie);
+        List<Pair<Integer, Long>> childScores = new ArrayList<Pair<Integer, Long>>();
+        for (Trie t : trie.children.values()) {
+            childScores.add(countTrie(n, t));
+        }
+        if (trie.isTerminal) {
+            childScores.add(Pair.of(1, 1L));
+        }
+
+        // System.err.println("Children " + childScores);
+
+        SortedMap<Integer, Long> perms = new TreeMap<Integer, Long>();
+        perms.put(0, 1L);
+        for (Pair<Integer, Long> childScore : childScores) {
+            SortedMap<Integer, Long> newPerms = new TreeMap<Integer, Long>();
+
+            int width = childScore.fst;
+            long childPerms = childScore.snd;
+            for (Map.Entry<Integer, Long> entry : perms.entrySet()) {
+                // System.err.println("Entry " + entry);
+                for (int overlap = 0; overlap <= Math.min(entry.getKey(), width); overlap++) {
+                    int idx = entry.getKey() + width - overlap;
+                    if (idx <= n) {
+                        long newPerm = mul(mul(mul(entry.getValue(),
+                                                combinations(width, overlap)),
+                                        permutations(entry.getKey(), overlap)),
+                                childPerms);
+
+                        // System.err.println("Overlap " + overlap + ", idx " + idx + ", adding " + newPerm);
+                        newPerms.put(idx, firstNonNull(newPerms.get(idx), 0L) + newPerm);
+                    }
+                }
+            }
+
+            // System.err.println(newPerms);
+
+            perms = newPerms;
+        }
+        int lastIdx = perms.lastKey();
+        System.err.println(trie + " -> " + lastIdx + " " + perms.get(lastIdx));
+        return Pair.of(lastIdx, perms.get(lastIdx));
+    }
+
+    private long combinations(int n, int r) {
+        BigInteger x = BigInteger.ONE;
+        for (int i = 1; i <= n; i++) {
+            x = x.multiply(BigInteger.valueOf(i));
+        }
+        for (int i = 1; i <= r; i++) {
+            x = x.divide(BigInteger.valueOf(i));
+        }
+        for (int i = 1; i <= (n - r); i++) {
+            x = x.divide(BigInteger.valueOf(i));
+        }
+
+        x = x.mod(BigInteger.valueOf(1000000007L));
+
+        return x.longValue();
+    }
+
+    private long permutations(int n, int r) {
+        BigInteger x = BigInteger.ONE;
+        for (int i = 1; i <= n; i++) {
+            x = x.multiply(BigInteger.valueOf(i));
+        }
+        for (int i = 1; i <= (n - r); i++) {
+            x = x.divide(BigInteger.valueOf(i));
+        }
+
+        x = x.mod(BigInteger.valueOf(1000000007L));
+
+        return x.longValue();
+    }
+
+
+    private long mul(long x, long y) {
+        return (x * y) % 1000000007L;
     }
 }
