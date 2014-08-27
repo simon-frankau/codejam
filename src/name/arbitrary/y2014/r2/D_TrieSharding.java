@@ -10,6 +10,8 @@ import static com.google.common.base.MoreObjects.firstNonNull;
 
 // Brute-force solution. Still too slow to run on the small example in time!
 public class D_TrieSharding extends CodeJamBase {
+    private final static long MODULUS = 1000000007L;
+
     D_TrieSharding(String fileName) {
         super(fileName);
     }
@@ -169,25 +171,25 @@ public class D_TrieSharding extends CodeJamBase {
 
         // System.err.println("Children " + childScores);
 
-        SortedMap<Integer, Long> perms = new TreeMap<Integer, Long>();
-        perms.put(0, 1L);
+        long[] perms = new long[n+1];
+        perms[0] = 1L;
         for (Pair<Integer, Long> childScore : childScores) {
-            SortedMap<Integer, Long> newPerms = new TreeMap<Integer, Long>();
+            long[] newPerms = new long[n+1];
 
             int width = childScore.fst;
             long childPerms = childScore.snd;
-            for (Map.Entry<Integer, Long> entry : perms.entrySet()) {
+            for (int i = 0; i < n + 1; i++) {
                 // System.err.println("Entry " + entry);
-                for (int overlap = 0; overlap <= Math.min(entry.getKey(), width); overlap++) {
-                    int idx = entry.getKey() + width - overlap;
+                for (int overlap = 0; overlap <= Math.min(i, width); overlap++) {
+                    int idx = i + width - overlap;
                     if (idx <= n) {
-                        long newPerm = mul(mul(mul(entry.getValue(),
+                        long newPerm = mul(mul(mul(perms[i],
                                                 combinations(width, overlap)),
-                                        permutations(entry.getKey(), overlap)),
+                                        permutations(i, overlap)),
                                 childPerms);
 
                         // System.err.println("Overlap " + overlap + ", idx " + idx + ", adding " + newPerm);
-                        newPerms.put(idx, firstNonNull(newPerms.get(idx), 0L) + newPerm);
+                        newPerms[idx] = (newPerms[idx] + newPerm) % MODULUS;
                     }
                 }
             }
@@ -196,9 +198,14 @@ public class D_TrieSharding extends CodeJamBase {
 
             perms = newPerms;
         }
-        int lastIdx = perms.lastKey();
-        System.err.println(trie + " -> " + lastIdx + " " + perms.get(lastIdx));
-        return Pair.of(lastIdx, perms.get(lastIdx));
+        int i;
+        for (i = n; i >= 0; i--) {
+            if (perms[i] != 0) {
+                break;
+            }
+        }
+        System.err.println(trie + " -> " + i + " " + perms[i]);
+        return Pair.of(i, perms[i]);
     }
 
     private long combinations(int n, int r) {
@@ -213,7 +220,7 @@ public class D_TrieSharding extends CodeJamBase {
             x = x.divide(BigInteger.valueOf(i));
         }
 
-        x = x.mod(BigInteger.valueOf(1000000007L));
+        x = x.mod(BigInteger.valueOf(MODULUS));
 
         return x.longValue();
     }
@@ -227,13 +234,13 @@ public class D_TrieSharding extends CodeJamBase {
             x = x.divide(BigInteger.valueOf(i));
         }
 
-        x = x.mod(BigInteger.valueOf(1000000007L));
+        x = x.mod(BigInteger.valueOf(MODULUS));
 
         return x.longValue();
     }
 
 
     private long mul(long x, long y) {
-        return (x * y) % 1000000007L;
+        return (x * y) % MODULUS;
     }
 }
