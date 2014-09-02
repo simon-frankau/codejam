@@ -4,7 +4,9 @@ import name.arbitrary.CodeJamBase;
 
 import java.util.List;
 
-// Started 22:15.
+// Initially 22:15-22:57
+// Fix bug 07:56-8:12
+// 58 minutes - really rather slower than it should be!
 public class A_MagicalMarvellousTour extends CodeJamBase {
     A_MagicalMarvellousTour(String fileName) {
         super(fileName);
@@ -32,42 +34,41 @@ public class A_MagicalMarvellousTour extends CodeJamBase {
         // Given end-points a and b, want to minimise the worst case for the three segments.
         // i.e. find the point at which we have 1/3rd in each, pretty much.
 
+        // Due to corner cases (*), we try each left hand end, and then get the appropriate right-hand
+        // end that minimises the probability of the opponent winning.
+
+        // (*) If the first segment is a bit more than a third, the other two segments are less than a third,
+        // and they should be split evenly, rather than targeting the last segment to be a third.
+
         long total = 0;
         for (long i : transistors) {
             total += i;
         }
 
-        long target = total / 3;
+        double minScore = 1.0;
 
-        // Generate last index to the left of which we're below 1/3, starting from left.
-        int lhsIdx = 0;
-        long lhsTotal = 0;
-        while (lhsTotal + transistors[lhsIdx] < target) {
+        // Try each left end
+        long lhsTotal = 0L;    // Sum less than lhsIdx
+        long rhsTotal = total; // Sum greater than or equal to rhsIdx
+        int rhsIdx = 0;
+        for (int lhsIdx = 0; lhsIdx < transistors.length; lhsIdx++) {
+            long remaining = total - lhsTotal;
+            long target = remaining / 2;
+            while (rhsIdx < transistors.length && rhsTotal - transistors[rhsIdx] > target) {
+                rhsTotal -= transistors[rhsIdx];
+                rhsIdx++;
+            }
+
+            minScore = Math.min(minScore, probCase(total, lhsTotal, rhsTotal));
+
+            if (rhsIdx < transistors.length) {
+                minScore = Math.min(minScore, probCase(total, lhsTotal, rhsTotal - transistors[rhsIdx]));
+            }
+
             lhsTotal += transistors[lhsIdx];
-            lhsIdx++;
         }
 
-        // Similar, from the right.
-        int rhsIdx = transistors.length - 1;
-        long rhsTotal = 0;
-        while (rhsTotal + transistors[rhsIdx] < target) {
-            rhsTotal += transistors[rhsIdx];
-            rhsIdx--;
-        }
-
-        System.err.println(lhsIdx + " " + rhsIdx);
-
-        double probWin = probCase(total, lhsTotal, rhsTotal);
-        if (lhsIdx < rhsIdx) {
-            double probWin2 = probCase(total, lhsTotal + transistors[lhsIdx], rhsTotal);
-            double probWin3 = probCase(total, lhsTotal, rhsTotal + transistors[rhsIdx]);
-            probWin = Math.min(probWin, Math.min(probWin2, probWin3));
-        }
-        if (lhsIdx + 1 < rhsIdx) {
-            double probWin4 = probCase(total, lhsTotal + transistors[lhsIdx], rhsTotal + transistors[rhsIdx]);
-            probWin = Math.min(probWin, probWin4);
-        }
-        return 1.0 - probWin;
+        return 1.0 - minScore;
     }
 
     private double probCase(long total, long lhsTotal, long rhsTotal) {
