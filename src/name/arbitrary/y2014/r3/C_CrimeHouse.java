@@ -2,12 +2,10 @@ package name.arbitrary.y2014.r3;
 
 import name.arbitrary.CodeJamBase;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 // 20:23 - 21:20 - Solve small case
+// - 22:09 - Working on large case
 public class C_CrimeHouse extends CodeJamBase {
     C_CrimeHouse(String fileName) {
         super(fileName);
@@ -19,7 +17,8 @@ public class C_CrimeHouse extends CodeJamBase {
 
     class Movement {
         public final boolean isEnter;
-        public final int identifier;
+        public int identifier;
+        public int returnTime = -1;
 
         Movement(boolean isEnter, int identifier) {
             this.isEnter = isEnter;
@@ -27,7 +26,7 @@ public class C_CrimeHouse extends CodeJamBase {
         }
 
         public String toString() {
-            return (isEnter ? "E " : "L ") + identifier;
+            return (isEnter ? "E " : "L ") + identifier + "(" + returnTime + ")";
         }
     }
 
@@ -40,7 +39,9 @@ public class C_CrimeHouse extends CodeJamBase {
             movements.add(new Movement(parts[0].equals("E"), Integer.parseInt(parts[1])));
         }
 
-        return simpleRun(movements);
+        // return simpleRun(movements);
+
+        return fastRun(movements);
     }
 
     // Run through possible statuses we can be in.
@@ -101,8 +102,6 @@ public class C_CrimeHouse extends CodeJamBase {
                     State newState = new State(state);
                     if (state.unknownsInHouse > 0) {
                         newState.unknownsInHouse--;
-                    } else {
-                        newState.inHouseAtStartOfDay++;
                     }
                     newStates.add(newState);
 
@@ -123,8 +122,6 @@ public class C_CrimeHouse extends CodeJamBase {
         } else {
             if (state.unknownsInHouse > 0) {
                 newState.unknownsInHouse--;
-            } else {
-                newState.inHouseAtStartOfDay++;
             }
         }
         newStates.add(newState);
@@ -138,20 +135,17 @@ public class C_CrimeHouse extends CodeJamBase {
     }
 
     class State {
-        public int inHouseAtStartOfDay;
         public int unknownsInHouse;
         public Set<Integer> knownInHouse;
         public Set<Integer> knownOutHouse;
 
         State() {
-            this.inHouseAtStartOfDay = 0;
             this.unknownsInHouse = 0;
             this.knownInHouse = new HashSet<Integer>();
             this.knownOutHouse = new HashSet<Integer>();
         }
 
         State(State that) {
-            this.inHouseAtStartOfDay = that.inHouseAtStartOfDay;
             this.unknownsInHouse = that.unknownsInHouse;
             this.knownInHouse = new HashSet<Integer>(that.knownInHouse);
             this.knownOutHouse = new HashSet<Integer>(that.knownOutHouse);
@@ -164,7 +158,6 @@ public class C_CrimeHouse extends CodeJamBase {
 
             State state = (State) o;
 
-            if (inHouseAtStartOfDay != state.inHouseAtStartOfDay) return false;
             if (unknownsInHouse != state.unknownsInHouse) return false;
             if (!knownInHouse.equals(state.knownInHouse)) return false;
             if (!knownOutHouse.equals(state.knownOutHouse)) return false;
@@ -174,8 +167,7 @@ public class C_CrimeHouse extends CodeJamBase {
 
         @Override
         public int hashCode() {
-            int result = inHouseAtStartOfDay;
-            result = 31 * result + unknownsInHouse;
+            int result = unknownsInHouse;
             result = 31 * result + knownInHouse.hashCode();
             result = 31 * result + knownOutHouse.hashCode();
             return result;
@@ -184,11 +176,110 @@ public class C_CrimeHouse extends CodeJamBase {
         @Override
         public String toString() {
             return "State{" +
-                    "inHouseAtStartOfDay=" + inHouseAtStartOfDay +
-                    ", unknownsInHouse=" + unknownsInHouse +
+                    "unknownsInHouse=" + unknownsInHouse +
                     ", knownInHouse=" + knownInHouse +
                     ", knownOutHouse=" + knownOutHouse +
                     '}';
         }
     }
+
+    private String fastRun(List<Movement> movements) {
+        // Annotate the movements with return times.
+        int n = movements.size();
+        Map<Integer, Integer> movedIn = new HashMap<Integer, Integer>();
+        Map<Integer, Integer> movedOut = new HashMap<Integer, Integer>();
+        for (int i = 0; i < n; i++) {
+            Movement movement = movements.get(i);
+            if (movement.identifier != 0) {
+                if (movement.isEnter) {
+                    if (movedIn.containsKey(movement.identifier)) {
+                        movements.get(movedIn.get(movement.identifier)).returnTime = i;
+                    }
+                    movedIn.put(movement.identifier, i);
+                    movedOut.remove(movement.identifier);
+                } else {
+                    if (movedOut.containsKey(movement.identifier)) {
+                        movements.get(movedOut.get(movement.identifier)).returnTime = i;
+                    }
+                    movedOut.put(movement.identifier, i);
+                    movedIn.remove(movement.identifier);
+                }
+            }
+        }
+
+        System.err.println(movements);
+
+        // Now, assign movements based on an earliest-deadline-first basis.
+        SortedMap<Integer, Integer> toBringIn = new TreeMap<Integer, Integer>();
+        SortedMap<Integer, Integer> toBringOut = new TreeMap<Integer, Integer>();
+        for (int i = 0; i < n; i++) {
+            if ((!toBringIn.isEmpty() && toBringIn.firstKey() <= i) ||
+                    (!toBringOut.isEmpty() && toBringOut.firstKey() <= i)) {
+                System.err.println("Missed deadline");
+                return "CRIME TIME";
+            }
+
+            Movement movement = movements.get(i);
+            int returnTime = movement.returnTime;
+            int identifier = movement.identifier;
+            if (movement.isEnter) {
+
+                if (returnTime >= 0) {
+                    toBringOut.put(returnTime, identifier);
+                } else if (identifier == 0) {
+                    if (!toBringIn.isEmpty()) {
+                        int key = toBringIn.firstKey();
+                        movement.identifier = toBringIn.get(key);
+                        toBringIn.remove(key);
+                    }
+                }
+            } else {
+                if (returnTime >= 0) {
+                    toBringIn.put(returnTime, identifier);
+                } else if (identifier == 0) {
+                    if (!toBringOut.isEmpty()) {
+                        int key = toBringOut.firstKey();
+                        movement.identifier = toBringOut.get(key);
+                        toBringOut.remove(key);
+                    }
+                }
+            }
+        }
+
+        // TODO: At this point, I think we've identified all the CRIME TIME cases,
+        // but a greedy algorithm is clearly not good enough to optimise for minimum
+        // unknown occupants at the end of day.
+
+        // Collect the set of known people in the house at the end of the day...
+        Set<Integer> knownIn = new HashSet<Integer>();
+        for (Movement movement : movements) {
+            if (movement.identifier != 0) {
+                if (movement.isEnter) {
+                    knownIn.add(movement.identifier);
+                } else {
+                    knownIn.remove(movement.identifier);
+                }
+            }
+        }
+
+        System.err.print(knownIn);
+
+        // Assuming the house is empty at the end of the day, track the number of occupants, and find the minimum
+        // number. This is the negation of the minimum number of occupants at the end of the day.
+        int occupants = 0;
+        int minOccupants = 0;
+        for (int i = n - 1; i >= 0; i--) {
+            Movement movement = movements.get(i);
+            if (movement.identifier == 0) {
+                occupants += movement.isEnter ? -1 : 1;
+                minOccupants = Math.min(minOccupants, occupants);
+            }
+        }
+
+        System.err.print(minOccupants);
+
+        return "" + (knownIn.size() - minOccupants) ;
+    }
 }
+
+// Out 2, Out 1, blah, Out 1, Out 2
