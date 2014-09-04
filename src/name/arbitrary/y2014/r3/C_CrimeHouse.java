@@ -184,67 +184,15 @@ public class C_CrimeHouse extends CodeJamBase {
     }
 
     private String fastRun(List<Movement> movements) {
-        // Annotate the movements with return times.
-        int n = movements.size();
-        Map<Integer, Integer> movedIn = new HashMap<Integer, Integer>();
-        Map<Integer, Integer> movedOut = new HashMap<Integer, Integer>();
-        for (int i = 0; i < n; i++) {
-            Movement movement = movements.get(i);
-            if (movement.identifier != 0) {
-                if (movement.isEnter) {
-                    if (movedIn.containsKey(movement.identifier)) {
-                        movements.get(movedIn.get(movement.identifier)).returnTime = i;
-                    }
-                    movedIn.put(movement.identifier, i);
-                    movedOut.remove(movement.identifier);
-                } else {
-                    if (movedOut.containsKey(movement.identifier)) {
-                        movements.get(movedOut.get(movement.identifier)).returnTime = i;
-                    }
-                    movedOut.put(movement.identifier, i);
-                    movedIn.remove(movement.identifier);
-                }
-            }
+        annotateWithReturnTimes(movements);
+
+        if (assignExitsToKnownPeople(movements)) {
+            return "CRIME TIME";
+        }
+        if (assignEntriesToKnownPeople(movements)) {
+            return "CRIME TIME";
         }
 
-        System.err.println(movements);
-
-        // Now, assign movements based on an earliest-deadline-first basis.
-        SortedMap<Integer, Integer> toBringIn = new TreeMap<Integer, Integer>();
-        SortedMap<Integer, Integer> toBringOut = new TreeMap<Integer, Integer>();
-        for (int i = 0; i < n; i++) {
-            if ((!toBringIn.isEmpty() && toBringIn.firstKey() <= i) ||
-                    (!toBringOut.isEmpty() && toBringOut.firstKey() <= i)) {
-                System.err.println("Missed deadline");
-                return "CRIME TIME";
-            }
-
-            Movement movement = movements.get(i);
-            int returnTime = movement.returnTime;
-            int identifier = movement.identifier;
-            if (movement.isEnter) {
-
-                if (returnTime >= 0) {
-                    toBringOut.put(returnTime, identifier);
-                } else if (identifier == 0) {
-                    if (!toBringIn.isEmpty()) {
-                        int key = toBringIn.firstKey();
-                        movement.identifier = toBringIn.get(key);
-                        toBringIn.remove(key);
-                    }
-                }
-            } else {
-                if (returnTime >= 0) {
-                    toBringIn.put(returnTime, identifier);
-                } else if (identifier == 0) {
-                    if (!toBringOut.isEmpty()) {
-                        int key = toBringOut.firstKey();
-                        movement.identifier = toBringOut.get(key);
-                        toBringOut.remove(key);
-                    }
-                }
-            }
-        }
 
         // TODO: At this point, I think we've identified all the CRIME TIME cases,
         // but a greedy algorithm is clearly not good enough to optimise for minimum
@@ -268,7 +216,7 @@ public class C_CrimeHouse extends CodeJamBase {
         // number. This is the negation of the minimum number of occupants at the end of the day.
         int occupants = 0;
         int minOccupants = 0;
-        for (int i = n - 1; i >= 0; i--) {
+        for (int i = movements.size() - 1; i >= 0; i--) {
             Movement movement = movements.get(i);
             if (movement.identifier == 0) {
                 occupants += movement.isEnter ? -1 : 1;
@@ -280,6 +228,96 @@ public class C_CrimeHouse extends CodeJamBase {
 
         return "" + (knownIn.size() - minOccupants) ;
     }
-}
 
-// Out 2, Out 1, blah, Out 1, Out 2
+    // Mark the movements that require an unknown in/out to make it work with when that person must
+    // have returned by.
+    private void annotateWithReturnTimes(List<Movement> movements) {
+        // Annotate the movements with return times.
+        int n = movements.size();
+        Map<Integer, Integer> movedIn = new HashMap<Integer, Integer>();
+        Map<Integer, Integer> movedOut = new HashMap<Integer, Integer>();
+        for (int i = 0; i < n; i++) {
+            Movement movement = movements.get(i);
+            if (movement.identifier != 0) {
+                if (movement.isEnter) {
+                    // For isEnter, return time goes on first time...
+                    if (movedIn.containsKey(movement.identifier)) {
+                        movements.get(movedIn.get(movement.identifier)).returnTime = i;
+                    }
+                    movedIn.put(movement.identifier, i);
+                    movedOut.remove(movement.identifier);
+                } else {
+                    // For exit, return time goes on second time.
+                    if (movedOut.containsKey(movement.identifier)) {
+                        movements.get(i).returnTime = movedOut.get(movement.identifier);
+                    }
+                    movedOut.put(movement.identifier, i);
+                    movedIn.remove(movement.identifier);
+                }
+            }
+        }
+
+        System.err.println(movements);
+    }
+
+    // Now, assign movements outward to known people as early as possible - the unknown people leave late,
+    // minimising the number that must be left.
+    private boolean assignExitsToKnownPeople(List<Movement> movements) {
+        SortedMap<Integer, Integer> toBringOut = new TreeMap<Integer, Integer>();
+        int n = movements.size();
+        for (int i = 0; i < n; i++) {
+            if (!toBringOut.isEmpty() && toBringOut.firstKey() <= i) {
+                System.err.println("Missed deadline");
+                return true;
+            }
+
+            Movement movement = movements.get(i);
+            int returnTime = movement.returnTime;
+            int identifier = movement.identifier;
+            if (movement.isEnter) {
+                if (returnTime >= 0) {
+                    toBringOut.put(returnTime, identifier);
+                }
+            } else {
+                if (identifier == 0) {
+                    if (!toBringOut.isEmpty()) {
+                        int key = toBringOut.firstKey();
+                        movement.identifier = toBringOut.get(key);
+                        toBringOut.remove(key);
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    // Assign entries to known people as late as possible, so all the unknowns enter early and can leave.
+    private boolean assignEntriesToKnownPeople(List<Movement> movements) {
+        SortedMap<Integer, Integer> toBringIn = new TreeMap<Integer, Integer>();
+        int n = movements.size();
+        for (int i = n - 1; i >= 0; i--) {
+            if (!toBringIn.isEmpty() && toBringIn.lastKey() >= i) {
+                System.err.println("Missed deadline");
+                return true;
+            }
+
+            Movement movement = movements.get(i);
+            int returnTime = movement.returnTime;
+            int identifier = movement.identifier;
+            if (!movement.isEnter) {
+                if (returnTime >= 0) {
+                    toBringIn.put(returnTime, identifier);
+                }
+            } else {
+                if (identifier == 0) {
+                    if (!toBringIn.isEmpty()) {
+                        int key = toBringIn.lastKey();
+                        movement.identifier = toBringIn.get(key);
+                        toBringIn.remove(key);
+                    }
+                }
+            }
+        }
+        return false;
+    }
+}
