@@ -4,8 +4,23 @@ import name.arbitrary.CodeJamBase;
 
 import java.util.*;
 
-// 20:23 - 21:20 - Solve small case
-// - 22:09 - Working on large case
+// To calculate the final score, we run through the timesteps, arbitrarily starting with 0 unknown occupants in the
+// house (we allow negative counts). The final number of unknown occupants minus the minimum number of unknown
+// occupants at any time is the number of unknown occupants at the end. To this we add the number of known occupants
+// (known ids whose last movement was entering), to get the final number of occupants.
+//
+// What we then have to do is assign identities to some of the unknown transitions such that:
+// * There are no enter-then-enter/leave-then-leaves by known people (if this cannot be done, CRIME TIME)
+// * We minimise the final occupant count
+//
+// The simplest solution is to brute force all the possible enterings and leavings, but we can eliminate some moves:
+// * If bringing a known person in, to avoid a double-leave, choose the earliest deadline first. The other person
+//   will have to come in at some time, and either it's too late for them the other way around, or switching the two
+//   around makes no difference.
+// * Ditto for double-entering.
+// * If bringing in a known person in order to reduce the number of unknown people entering, bring in the person
+//   with the longest deadline - similar reasoning.
+//
 public class C_CrimeHouse extends CodeJamBase {
     C_CrimeHouse(String fileName) {
         super(fileName);
@@ -39,9 +54,9 @@ public class C_CrimeHouse extends CodeJamBase {
             movements.add(new Movement(parts[0].equals("E"), Integer.parseInt(parts[1])));
         }
 
-        // return simpleRun(movements);
+        return simpleRun(movements);
 
-        return fastRun(movements);
+        // return fastRun(movements);
     }
 
     // Run through possible statuses we can be in.
@@ -51,7 +66,7 @@ public class C_CrimeHouse extends CodeJamBase {
 
         int i = 0;
         for (Movement movement : movements) {
-            states = doMovement(states, movement);
+            states = doMovement(states, movements, i);
             // System.err.println(states);
             System.err.println(i++);
         }
@@ -70,7 +85,8 @@ public class C_CrimeHouse extends CodeJamBase {
         return "" + minNum;
     }
 
-    private Set<State> doMovement(Set<State> states, Movement movement) {
+    private Set<State> doMovement(Set<State> states, List<Movement> movements, int i) {
+        Movement movement = movements.get(i);
         Set<State> newStates = new HashSet<State>();
         for (State state : states) {
             if (movement.isEnter) {
@@ -86,10 +102,16 @@ public class C_CrimeHouse extends CodeJamBase {
                     newState.unknownsInHouse++;
                     newStates.add(newState);
 
-                    for (int person : state.knownOutHouse) {
-                        sendKnownIn(person, newStates, state);
+                    int p1 = earliestLeaver(state.knownOutHouse, movements, i);
+                    if (p1 != 0) {
+                        sendKnownIn(p1, newStates, state);
                     }
-                }
+/* Never helps to assign an identity to someone entering, just for the sake of it...
+                    int p2 = lastEnterer(state.knownOutHouse, movements, i);
+                    if (p2 != 0) {
+                        sendKnownIn(p2, newStates, state);
+                    }
+ */               }
             } else {
                 // Leaving
                 if (movement.identifier != 0) {
@@ -105,13 +127,74 @@ public class C_CrimeHouse extends CodeJamBase {
                     }
                     newStates.add(newState);
 
-                    for (int person : state.knownInHouse) {
-                        sendKnownOut(person, newStates, state);
+                    int p1 = earliestEnterer(state.knownInHouse, movements, i);
+                    if (p1 != 0) {
+                        sendKnownOut(p1, newStates, state);
+                    }
+
+                    int p2 = lastLeaver(state.knownInHouse, movements, i);
+                    if (p2 != 0) {
+                        sendKnownOut(p2, newStates, state);
                     }
                 }
             }
         }
         return newStates;
+    }
+
+    private int earliestLeaver(Set<Integer> knownOutHouse, List<Movement> movements, int i) {
+        Set<Integer> candidates = new HashSet<Integer>(knownOutHouse);
+        while (++i < movements.size()) {
+            Movement movement = movements.get(i);
+            if (movement.identifier != 0) {
+                if (movement.isEnter) {
+                    candidates.remove(movement.identifier);
+                } else {
+                    if (candidates.contains(movement.identifier)) {
+                        return movement.identifier;
+                    }
+                }
+            }
+        }
+        return 0;
+    }
+
+    private int earliestEnterer(Set<Integer> knownInHouse, List<Movement> movements, int i) {
+        Set<Integer> candidates = new HashSet<Integer>(knownInHouse);
+        while (++i < movements.size()) {
+            Movement movement = movements.get(i);
+            if (movement.identifier != 0) {
+                if (!movement.isEnter) {
+                    candidates.remove(movement.identifier);
+                } else {
+                    if (candidates.contains(movement.identifier)) {
+                        return movement.identifier;
+                    }
+                }
+            }
+        }
+        return 0;
+    }
+
+    private int lastLeaver(Set<Integer> knownInHouse, List<Movement> movements, int i) {
+        Set<Integer> candidates = new HashSet<Integer>(knownInHouse);
+        int candidate = 0;
+        while (++i < movements.size()) {
+            Movement movement = movements.get(i);
+            if (movement.identifier != 0) {
+                if (!movement.isEnter && candidates.contains(movement.identifier)) {
+                    candidate = movement.identifier;
+                }
+                candidates.remove(movement.identifier);
+            }
+        }
+
+        // Never leaves counts as a last leaver.
+        if (!candidates.isEmpty()) {
+            return candidates.iterator().next();
+        }
+
+        return candidate;
     }
 
     private void sendKnownOut(int identifier, Set<State> newStates, State state) {
@@ -181,143 +264,5 @@ public class C_CrimeHouse extends CodeJamBase {
                     ", knownOutHouse=" + knownOutHouse +
                     '}';
         }
-    }
-
-    private String fastRun(List<Movement> movements) {
-        annotateWithReturnTimes(movements);
-
-        if (assignExitsToKnownPeople(movements)) {
-            return "CRIME TIME";
-        }
-        if (assignEntriesToKnownPeople(movements)) {
-            return "CRIME TIME";
-        }
-
-
-        // TODO: At this point, I think we've identified all the CRIME TIME cases,
-        // but a greedy algorithm is clearly not good enough to optimise for minimum
-        // unknown occupants at the end of day.
-
-        // Collect the set of known people in the house at the end of the day...
-        Set<Integer> knownIn = new HashSet<Integer>();
-        for (Movement movement : movements) {
-            if (movement.identifier != 0) {
-                if (movement.isEnter) {
-                    knownIn.add(movement.identifier);
-                } else {
-                    knownIn.remove(movement.identifier);
-                }
-            }
-        }
-
-        System.err.print(knownIn);
-
-        // Assuming the house is empty at the end of the day, track the number of occupants, and find the minimum
-        // number. This is the negation of the minimum number of occupants at the end of the day.
-        int occupants = 0;
-        int minOccupants = 0;
-        for (int i = movements.size() - 1; i >= 0; i--) {
-            Movement movement = movements.get(i);
-            if (movement.identifier == 0) {
-                occupants += movement.isEnter ? -1 : 1;
-                minOccupants = Math.min(minOccupants, occupants);
-            }
-        }
-
-        System.err.print(minOccupants);
-
-        return "" + (knownIn.size() - minOccupants) ;
-    }
-
-    // Mark the movements that require an unknown in/out to make it work with when that person must
-    // have returned by.
-    private void annotateWithReturnTimes(List<Movement> movements) {
-        // Annotate the movements with return times.
-        int n = movements.size();
-        Map<Integer, Integer> movedIn = new HashMap<Integer, Integer>();
-        Map<Integer, Integer> movedOut = new HashMap<Integer, Integer>();
-        for (int i = 0; i < n; i++) {
-            Movement movement = movements.get(i);
-            if (movement.identifier != 0) {
-                if (movement.isEnter) {
-                    // For isEnter, return time goes on first time...
-                    if (movedIn.containsKey(movement.identifier)) {
-                        movements.get(movedIn.get(movement.identifier)).returnTime = i;
-                    }
-                    movedIn.put(movement.identifier, i);
-                    movedOut.remove(movement.identifier);
-                } else {
-                    // For exit, return time goes on second time.
-                    if (movedOut.containsKey(movement.identifier)) {
-                        movements.get(i).returnTime = movedOut.get(movement.identifier);
-                    }
-                    movedOut.put(movement.identifier, i);
-                    movedIn.remove(movement.identifier);
-                }
-            }
-        }
-
-        System.err.println(movements);
-    }
-
-    // Now, assign movements outward to known people as early as possible - the unknown people leave late,
-    // minimising the number that must be left.
-    private boolean assignExitsToKnownPeople(List<Movement> movements) {
-        SortedMap<Integer, Integer> toBringOut = new TreeMap<Integer, Integer>();
-        int n = movements.size();
-        for (int i = 0; i < n; i++) {
-            if (!toBringOut.isEmpty() && toBringOut.firstKey() <= i) {
-                System.err.println("Missed deadline");
-                return true;
-            }
-
-            Movement movement = movements.get(i);
-            int returnTime = movement.returnTime;
-            int identifier = movement.identifier;
-            if (movement.isEnter) {
-                if (returnTime >= 0) {
-                    toBringOut.put(returnTime, identifier);
-                }
-            } else {
-                if (identifier == 0) {
-                    if (!toBringOut.isEmpty()) {
-                        int key = toBringOut.firstKey();
-                        movement.identifier = toBringOut.get(key);
-                        toBringOut.remove(key);
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
-    // Assign entries to known people as late as possible, so all the unknowns enter early and can leave.
-    private boolean assignEntriesToKnownPeople(List<Movement> movements) {
-        SortedMap<Integer, Integer> toBringIn = new TreeMap<Integer, Integer>();
-        int n = movements.size();
-        for (int i = n - 1; i >= 0; i--) {
-            if (!toBringIn.isEmpty() && toBringIn.lastKey() >= i) {
-                System.err.println("Missed deadline");
-                return true;
-            }
-
-            Movement movement = movements.get(i);
-            int returnTime = movement.returnTime;
-            int identifier = movement.identifier;
-            if (!movement.isEnter) {
-                if (returnTime >= 0) {
-                    toBringIn.put(returnTime, identifier);
-                }
-            } else {
-                if (identifier == 0) {
-                    if (!toBringIn.isEmpty()) {
-                        int key = toBringIn.lastKey();
-                        movement.identifier = toBringIn.get(key);
-                        toBringIn.remove(key);
-                    }
-                }
-            }
-        }
-        return false;
     }
 }
