@@ -55,8 +55,6 @@ public class C_CrimeHouse extends CodeJamBase {
         }
 
         return simpleRun(movements);
-
-        // return fastRun(movements);
     }
 
     // Run through possible statuses we can be in.
@@ -68,7 +66,7 @@ public class C_CrimeHouse extends CodeJamBase {
         for (Movement movement : movements) {
             states = doMovement(states, movements, i);
             // System.err.println(states);
-            System.err.println(i++);
+            System.err.println(i++ + " (" + states.size() + ")");
         }
 
         if (states.isEmpty()) {
@@ -98,13 +96,18 @@ public class C_CrimeHouse extends CodeJamBase {
                     }
                 } else {
                     // Unknown person entering. Could be a new person, or one of the ones we know are out.
-                    State newState = new State(state);
-                    newState.unknownsInHouse++;
-                    newStates.add(newState);
 
+                    // Choose someone who's out and needs to go out again, if there is one.
                     int p1 = earliestLeaver(state.knownOutHouse, movements, i);
                     if (p1 != 0) {
                         sendKnownIn(p1, newStates, state);
+                    } else {
+                        // Only send an unknown person in if there are no knowns that must be sent in. We want the
+                        // unknown entries as late as possible.
+                        State newState = new State(state);
+                        newState.unknownsInHouse++;
+                        newStates.add(newState);
+
                     }
 /* Never helps to assign an identity to someone entering, just for the sake of it...
                     int p2 = lastEnterer(state.knownOutHouse, movements, i);
