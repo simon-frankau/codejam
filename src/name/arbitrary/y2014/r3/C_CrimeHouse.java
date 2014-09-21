@@ -85,6 +85,14 @@ public class C_CrimeHouse extends CodeJamBase {
         return "" + minNum;
     }
 
+    // '/' represents entry, '\' exit (looks like a graph of number of people in).
+    //
+    // We want to convert the graph of unknown entry/exits from \.../ to ... , to pull up the low point in the count
+    // of people in the house (and thus decrease the occupants at the end, compared to the baseline).
+    //
+    // Just going from \... to ... is also possibly useful, as it removes a known person from the house at the end.
+    //
+    // We never want to convert /...\ to ..., since that can make the final occupancy count worse.
     private Map<State, Integer> doMovement(Map<State, Integer> states, List<Movement> movements, int i) {
         Movement movement = movements.get(i);
         Map<State, Integer> newStates = new HashMap<State, Integer>();
@@ -106,8 +114,11 @@ public class C_CrimeHouse extends CodeJamBase {
                     if (p1 != 0) {
                         sendKnownIn(p1, newStates, state, unknownsInHouse);
                     } else {
-                        // Only send an unknown person in if there are no knowns that must be sent in. We want the
-                        // unknown entries as late as possible.
+                        // Only send an unknown person in if there are no knowns that must be sent in. Bringing knowns
+                        // in early is fine, on the grounds that we can commute the sequence of unknown enter
+                        // assignments, and an unknown enter followed by an unknown leave assigned to the same person
+                        // can be thought of as just removing a transient /\ that we wouldn't otherwise touch.
+
                         State newState = new State(state);
                         unknownsInHouse++;
                         if (firstNonNull(newStates.get(newState), Integer.MAX_VALUE) > unknownsInHouse) {
