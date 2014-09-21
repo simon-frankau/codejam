@@ -61,8 +61,8 @@ public class C_CrimeHouse extends CodeJamBase {
 
     // Run through possible statuses we can be in.
     private String simpleRun(List<Movement> movements) {
-        Map<State, Integer> states = new HashMap<State, Integer>();
-        states.put(new State(), 0);
+        Set<State> states = new HashSet<State>();
+        states.add(new State());
 
         int i = 0;
         for (Movement movement : movements) {
@@ -76,8 +76,8 @@ public class C_CrimeHouse extends CodeJamBase {
         }
 
         int minNum = Integer.MAX_VALUE;
-        for (Map.Entry<State, Integer> entry : states.entrySet()) {
-            int thisCase = entry.getValue() + entry.getKey().knownInHouse.size();
+        for (State state : states) {
+            int thisCase = state.unknownsInHouse + state.knownInHouse.size();
             if (thisCase < minNum) {
                 minNum = thisCase;
             }
@@ -93,18 +93,16 @@ public class C_CrimeHouse extends CodeJamBase {
     // Just going from \... to ... is also possibly useful, as it removes a known person from the house at the end.
     //
     // We never want to convert /...\ to ..., since that can make the final occupancy count worse.
-    private Map<State, Integer> doMovement(Map<State, Integer> states, List<Movement> movements, int i) {
+    private Set<State> doMovement(Set<State> states, List<Movement> movements, int i) {
         Movement movement = movements.get(i);
-        Map<State, Integer> newStates = new HashMap<State, Integer>();
-        for (Map.Entry<State, Integer> entry : states.entrySet()) {
-            State state = entry.getKey();
-            int unknownsInHouse = entry.getValue();
+        Set<State> newStates = new HashSet<State>();
+        for (State state : states) {
             if (movement.isEnter) {
                 // Entering
                 if (movement.identifier != 0) {
                     // Known person coming in.
                     if (!state.knownInHouse.contains(movement.identifier)) {
-                        sendKnownIn(movement.identifier, newStates, state, unknownsInHouse);
+                        sendKnownIn(movement.identifier, newStates, state);
                     }
                 } else {
                     // Unknown person entering. Could be a new person, or one of the ones we know are out.
@@ -112,7 +110,7 @@ public class C_CrimeHouse extends CodeJamBase {
                     // Choose someone who's out and needs to go out again, if there is one.
                     int p1 = earliestLeaver(state.knownOutHouse, movements, i);
                     if (p1 != 0) {
-                        sendKnownIn(p1, newStates, state, unknownsInHouse);
+                        sendKnownIn(p1, newStates, state);
                     } else {
                         // Only send an unknown person in if there are no knowns that must be sent in. Bringing knowns
                         // in early is fine, on the grounds that we can commute the sequence of unknown enter
@@ -120,10 +118,8 @@ public class C_CrimeHouse extends CodeJamBase {
                         // can be thought of as just removing a transient /\ that we wouldn't otherwise touch.
 
                         State newState = new State(state);
-                        unknownsInHouse++;
-                        if (firstNonNull(newStates.get(newState), Integer.MAX_VALUE) > unknownsInHouse) {
-                            newStates.put(newState, unknownsInHouse);
-                        }
+                        newState.unknownsInHouse++;
+                        newStates.add(newState);
                     }
 /* Never helps to assign an identity to someone entering, just for the sake of it...
                     int p2 = lastEnterer(state.knownOutHouse, movements, i);
@@ -136,27 +132,24 @@ public class C_CrimeHouse extends CodeJamBase {
                 if (movement.identifier != 0) {
                     // Known person leaving
                     if (!state.knownOutHouse.contains(movement.identifier)) {
-                        sendKnownOut(movement.identifier, newStates, state, unknownsInHouse);
+                        sendKnownOut(movement.identifier, newStates, state);
                     }
                 } else {
                     // Unknown person leaving. Could be a new person, or one of the ones we know are in.
                     State newState = new State(state);
-                    int newUnknownsInHouse = unknownsInHouse;
-                    if (newUnknownsInHouse > 0) {
-                        newUnknownsInHouse--;
+                    if (newState.unknownsInHouse > 0) {
+                        newState.unknownsInHouse--;
                     }
-                    if (firstNonNull(newStates.get(newState), Integer.MAX_VALUE) > newUnknownsInHouse) {
-                        newStates.put(newState, newUnknownsInHouse);
-                    }
+                    newStates.add(newState);
 
                     int p1 = earliestEnterer(state.knownInHouse, movements, i);
                     if (p1 != 0) {
-                        sendKnownOut(p1, newStates, state, unknownsInHouse);
+                        sendKnownOut(p1, newStates, state);
                     }
 
                     int p2 = lastLeaver(state.knownInHouse, movements, i);
                     if (p2 != 0) {
-                        sendKnownOut(p2, newStates, state, unknownsInHouse);
+                        sendKnownOut(p2, newStates, state);
                     }
                 }
             }
@@ -219,28 +212,24 @@ public class C_CrimeHouse extends CodeJamBase {
         return candidate;
     }
 
-    private void sendKnownOut(int identifier, Map<State, Integer> newStates, State state, int unknownsInHouse) {
+    private void sendKnownOut(int identifier, Set<State> newStates, State state) {
         State newState = new State(state);
         newState.knownOutHouse.add(identifier);
         if (state.knownInHouse.contains(identifier)) {
             newState.knownInHouse.remove(identifier);
         } else {
-            if (unknownsInHouse > 0) {
-                unknownsInHouse--;
+            if (newState.unknownsInHouse > 0) {
+                newState.unknownsInHouse--;
             }
         }
-        if (firstNonNull(newStates.get(newState), Integer.MAX_VALUE) > unknownsInHouse) {
-            newStates.put(newState, unknownsInHouse);
-        }
+        newStates.add(newState);
     }
 
-    private void sendKnownIn(int identifier, Map<State, Integer> newStates, State state, int unknownsInHouse) {
+    private void sendKnownIn(int identifier, Set<State> newStates, State state) {
         State newState = new State(state);
         newState.knownOutHouse.remove(identifier);
         newState.knownInHouse.add(identifier);
-        if (firstNonNull(newStates.get(newState), Integer.MAX_VALUE) > unknownsInHouse) {
-            newStates.put(newState, unknownsInHouse);
-        }
+        newStates.add(newState);
     }
 
     class State {
