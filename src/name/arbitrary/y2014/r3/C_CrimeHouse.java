@@ -54,242 +54,251 @@ public class C_CrimeHouse extends CodeJamBase {
             movements.add(new Movement(parts[0].equals("E"), Integer.parseInt(parts[1])));
         }
 
-        return simpleRun(movements);
+        return new Run(movements.toArray(new Movement[movements.size()])).go();
     }
 
-    // Run through possible statuses we can be in.
-    private String simpleRun(List<Movement> movements) {
-        int[] nextUses = nextUsages(movements);
+    private static class Run {
+        private final Movement[] movements;
+        private final int[] nextUses;
 
-        Set<State> states = new HashSet<State>();
-        states.add(new State());
-
-        int i = 0;
-        for (Movement movement : movements) {
-            states = doMovement(states, nextUses, movements, i);
-            System.err.println(states);
-            System.err.println(i++ + " (" + states.size() + ")");
+        public Run(Movement[] movements) {
+            this.movements = movements;
+            this.nextUses = nextUsages(movements);
         }
 
-        if (states.isEmpty()) {
-            return "CRIME TIME";
-        }
+        // Run through possible statuses we can be in.
+        private String go() {
+            Set<State> states = new HashSet<State>();
+            states.add(new State());
 
-        int minNum = Integer.MAX_VALUE;
-        for (State state : states) {
-            int thisCase = state.unknownsInHouse + state.knownInHouse.size();
-            if (thisCase < minNum) {
-                minNum = thisCase;
+            for (int i = 0; i < movements.length; i++) {
+                states = doMovement(states, i);
+                System.err.println(states);
+                System.err.println(i + " (" + states.size() + ")");
             }
-        }
-        return "" + minNum;
-    }
 
-    // '/' represents entry, '\' exit (looks like a graph of number of people in).
-    //
-    // We want to convert the graph of unknown entry/exits from \.../ to ... , to pull up the low point in the count
-    // of people in the house (and thus decrease the occupants at the end, compared to the baseline).
-    //
-    // Just going from \... to ... is also possibly useful, as it removes a known person from the house at the end.
-    //
-    // We never want to convert /...\ to ..., since that can make the final occupancy count worse.
-    private Set<State> doMovement(Set<State> states, int[] nextUses, List<Movement> movements, int i) {
-        Movement movement = movements.get(i);
-        Set<State> newStates = new HashSet<State>();
-        for (State state : states) {
-            if (movement.isEnter) {
-                // Entering
-                if (movement.identifier != 0) {
-                    // Known person coming in.
-                    if (!state.knownInHouse.contains(movement.identifier)) {
-                        sendKnownIn(movement.identifier, newStates, state);
-                    }
-                } else {
-                    // Unknown person entering. Could be a new person, or one of the ones we know are out.
+            if (states.isEmpty()) {
+                return "CRIME TIME";
+            }
 
-                    // Choose someone who's out and needs to go out again, if there is one.
-                    int p1 = earliestLeaver(state.toComeIn, nextUses, movements, i);
-                    if (p1 != 0) {
-                        sendKnownIn(p1, newStates, state);
-                    } else {
-                        // Only send an unknown person in if there are no knowns that must be sent in. Bringing knowns
-                        // in early is fine, on the grounds that we can commute the sequence of unknown enter
-                        // assignments, and an unknown enter followed by an unknown leave assigned to the same person
-                        // can be thought of as just removing a transient /\ that we wouldn't otherwise touch.
-
-                        State newState = new State(state);
-                        newState.unknownsInHouse++;
-                        newStates.add(newState);
-                    }
-/* Never helps to assign an identity to someone entering, just for the sake of it...
-                    int p2 = lastEnterer(state.knownOutHouse, movements, i);
-                    if (p2 != 0) {
-                        sendKnownIn(p2, newStates, state);
-                    }
- */               }
-            } else {
-                // Leaving
-                if (movement.identifier != 0) {
-                    // Known person leaving (if already out of the house, it's a CRIME TIME state).
-                    if (!state.knownOutHouse.contains(movement.identifier)) {
-                        sendKnownOut(movement.identifier, newStates, state, i, nextUses, movements);
-                    }
-                } else {
-                    // Unknown person leaving. Could be a new person, or one of the ones we know are in.
-                    State newState = new State(state);
-                    if (newState.unknownsInHouse > 0) {
-                        newState.unknownsInHouse--;
-                    }
-                    newStates.add(newState);
-
-                    int p1 = earliestEnterer(state.knownInHouse, movements, i);
-                    if (p1 != 0) {
-                        sendKnownOut(p1, newStates, state, i, nextUses, movements);
-                    }
-
-                    int p2 = lastLeaver(state.knownInHouse, movements, i);
-                    if (p2 != 0) {
-                        sendKnownOut(p2, newStates, state, i, nextUses, movements);
-                    }
+            int minNum = Integer.MAX_VALUE;
+            for (State state : states) {
+                int thisCase = state.unknownsInHouse + state.knownInHouse.size();
+                if (thisCase < minNum) {
+                    minNum = thisCase;
                 }
             }
+            return "" + minNum;
         }
-        return newStates;
-    }
 
-    private int earliestLeaver(Set<Integer> knownOutHouse, int[] nextUses, List<Movement> movements, int i) {
-/*
-        int time = Integer.MAX_VALUE;
-        int result = 0;
-        for (int candidate : knownOutHouse) {
-            int movementNumber = nextUses[candidate];
-            if (movementNumber < 1000000) {
-                Movement movement = movements.get(movementNumber);
-                if (!movement.isEnter && movementNumber < time) {
-                    time = movementNumber;
-                    result = candidate;
-                }
-            }
-        }
-        return result;
-*/
-
-        Set<Integer> candidates = new HashSet<Integer>(knownOutHouse);
-        while (++i < movements.size()) {
-            Movement movement = movements.get(i);
-            if (movement.identifier != 0) {
+        // '/' represents entry, '\' exit (looks like a graph of number of people in).
+        //
+        // We want to convert the graph of unknown entry/exits from \.../ to ... , to pull up the low point in the count
+        // of people in the house (and thus decrease the occupants at the end, compared to the baseline).
+        //
+        // Just going from \... to ... is also possibly useful, as it removes a known person from the house at the end.
+        //
+        // We never want to convert /...\ to ..., since that can make the final occupancy count worse.
+        private Set<State> doMovement(Set<State> states, int i) {
+            Movement movement = movements[i];
+            Set<State> newStates = new HashSet<State>();
+            for (State state : states) {
                 if (movement.isEnter) {
-                    candidates.remove(movement.identifier);
+                    // Entering
+                    if (movement.identifier != 0) {
+                        // Known person coming in.
+                        if (!state.knownInHouse.contains(movement.identifier)) {
+                            sendKnownIn(movement.identifier, newStates, state);
+                        }
+                    } else {
+                        // Unknown person entering. Could be a new person, or one of the ones we know are out.
+
+                        // Choose someone who's out and needs to go out again, if there is one.
+                        int p1 = earliestLeaver(state.knownOutHouse, i);
+                        if (p1 != 0) {
+                            sendKnownIn(p1, newStates, state);
+                        } else {
+                            // Only send an unknown person in if there are no knowns that must be sent in. Bringing knowns
+                            // in early is fine, on the grounds that we can commute the sequence of unknown enter
+                            // assignments, and an unknown enter followed by an unknown leave assigned to the same person
+                            // can be thought of as just removing a transient /\ that we wouldn't otherwise touch.
+
+                            State newState = new State(state);
+                            newState.unknownsInHouse++;
+                            newStates.add(newState);
+                        }
+    /* Never helps to assign an identity to someone entering, just for the sake of it...
+                        int p2 = lastEnterer(state.knownOutHouse, i);
+                        if (p2 != 0) {
+                            sendKnownIn(p2, newStates, state);
+                        }
+     */
+                    }
                 } else {
-                    if (candidates.contains(movement.identifier)) {
-                        return movement.identifier;
+                    // Leaving
+                    if (movement.identifier != 0) {
+                        // Known person leaving (if already out of the house, it's a CRIME TIME state).
+                        if (!state.knownOutHouse.contains(movement.identifier)) {
+                            sendKnownOut(movement.identifier, newStates, state, i);
+                        }
+                    } else {
+                        // Unknown person leaving. Could be a new person, or one of the ones we know are in.
+                        State newState = new State(state);
+                        if (newState.unknownsInHouse > 0) {
+                            newState.unknownsInHouse--;
+                        }
+                        newStates.add(newState);
+
+                        int p1 = earliestEnterer(state.knownInHouse, i);
+                        if (p1 != 0) {
+                            sendKnownOut(p1, newStates, state, i);
+                        }
+
+                        int p2 = lastLeaver(state.knownInHouse, i);
+                        if (p2 != 0) {
+                            sendKnownOut(p2, newStates, state, i);
+                        }
                     }
                 }
             }
+            return newStates;
         }
-        return 0;
-    }
 
-    private int earliestEnterer(Set<Integer> knownInHouse, List<Movement> movements, int i) {
-        Set<Integer> candidates = new HashSet<Integer>(knownInHouse);
-        while (++i < movements.size()) {
-            Movement movement = movements.get(i);
-            if (movement.identifier != 0) {
-                if (!movement.isEnter) {
-                    candidates.remove(movement.identifier);
-                } else {
-                    if (candidates.contains(movement.identifier)) {
-                        return movement.identifier;
+        private int earliestLeaver(Set<Integer> knownOutHouse, int i) {
+    /*
+            int time = Integer.MAX_VALUE;
+            int result = 0;
+            for (int candidate : knownOutHouse) {
+                int movementNumber = nextUses[candidate];
+                if (movementNumber < 1000000) {
+                    Movement movement = movements.get(movementNumber);
+                    if (!movement.isEnter && movementNumber < time) {
+                        time = movementNumber;
+                        result = candidate;
                     }
                 }
             }
-        }
-        return 0;
-    }
+            return result;
+    */
 
-    private int lastLeaver(Set<Integer> knownInHouse, List<Movement> movements, int i) {
-        Set<Integer> candidates = new HashSet<Integer>(knownInHouse);
-        int candidate = 0;
-        while (++i < movements.size()) {
-            Movement movement = movements.get(i);
-            if (movement.identifier != 0) {
-                if (!movement.isEnter && candidates.contains(movement.identifier)) {
-                    candidate = movement.identifier;
+            Set<Integer> candidates = new HashSet<Integer>(knownOutHouse);
+            while (++i < movements.length) {
+                Movement movement = movements[i];
+                if (movement.identifier != 0) {
+                    if (movement.isEnter) {
+                        candidates.remove(movement.identifier);
+                    } else {
+                        if (candidates.contains(movement.identifier)) {
+                            return movement.identifier;
+                        }
+                    }
                 }
-                candidates.remove(movement.identifier);
             }
+            return 0;
         }
 
-        // Never leaves counts as a last leaver.
-        if (!candidates.isEmpty()) {
-            return candidates.iterator().next();
-        }
-
-        return candidate;
-    }
-
-    private void sendKnownOut(int identifier, Set<State> newStates, State state, int stepNum, int[] nextUses, List<Movement> movements) {
-        State newState = new State(state);
-        newState.knownOutHouse.add(identifier);
-
-        // TODO: This is broken because the current step may be unassigned and thus not actually have anything
-        // useful for 'nextUse'.
-        int nextUse = nextUses[stepNum];
-        if (nextUse < 1000000) {
-            Movement nextMovement = movements.get(nextUse);
-            if (!nextMovement.isEnter) {
-                newState.toComeIn.add(identifier);
-            }
-        }
-
-        if (state.knownInHouse.contains(identifier)) {
-            newState.knownInHouse.remove(identifier);
-        } else {
-            if (newState.unknownsInHouse > 0) {
-                newState.unknownsInHouse--;
-            }
-        }
-        newStates.add(newState);
-    }
-
-    private void sendKnownIn(int identifier, Set<State> newStates, State state) {
-        State newState = new State(state);
-        newState.knownOutHouse.remove(identifier);
-        newState.toComeIn.remove(identifier);
-        newState.knownInHouse.add(identifier);
-        newStates.add(newState);
-    }
-
-    // Generate a map saying for movement n, what the next usage of that identifier is.
-    // >= 1000000 means never used again. Use different values so that the values are
-    // unique (and thus can be keys in maps, etc.)
-    int[] nextUsages(List<Movement> movements) {
-        int[] result = new int[movements.size()];
-        for (int i = 0; i < movements.size(); i++) {
-            result[i] = 1000000 + i;
-        }
-
-        Map<Integer, Integer> lastUsages = new HashMap<Integer, Integer>();
-        for (int i = 0; i < movements.size(); i++) {
-            Movement movement = movements.get(i);
-            if (movement.identifier != 0) {
-                Integer lastUsage = lastUsages.get(movement.identifier);
-                if (lastUsage != null) {
-                    result[lastUsage] = i;
+        private int earliestEnterer(Set<Integer> knownInHouse, int i) {
+            Set<Integer> candidates = new HashSet<Integer>(knownInHouse);
+            while (++i < movements.length) {
+                Movement movement = movements[i];
+                if (movement.identifier != 0) {
+                    if (!movement.isEnter) {
+                        candidates.remove(movement.identifier);
+                    } else {
+                        if (candidates.contains(movement.identifier)) {
+                            return movement.identifier;
+                        }
+                    }
                 }
-                lastUsages.put(movement.identifier, i);
             }
+            return 0;
         }
 
-        for (int item : result) {
-            System.err.print(item + " ");
-        }
-        System.err.println("");
+        private int lastLeaver(Set<Integer> knownInHouse, int i) {
+            Set<Integer> candidates = new HashSet<Integer>(knownInHouse);
+            int candidate = 0;
+            while (++i < movements.length) {
+                Movement movement = movements[i];
+                if (movement.identifier != 0) {
+                    if (!movement.isEnter && candidates.contains(movement.identifier)) {
+                        candidate = movement.identifier;
+                    }
+                    candidates.remove(movement.identifier);
+                }
+            }
 
-        return result;
+            // Never leaves counts as a last leaver.
+            if (!candidates.isEmpty()) {
+                return candidates.iterator().next();
+            }
+
+            return candidate;
+        }
+
+        private void sendKnownOut(int identifier, Set<State> newStates, State state, int stepNum) {
+            State newState = new State(state);
+            newState.knownOutHouse.add(identifier);
+
+            // TODO: This is broken because the current step may be unassigned and thus not actually have anything
+            // useful for 'nextUse'.
+            int nextUse = nextUses[stepNum];
+            if (nextUse < 1000000) {
+                Movement nextMovement = movements[nextUse];
+                if (!nextMovement.isEnter) {
+                    newState.toComeIn.add(identifier);
+                }
+            }
+
+            if (state.knownInHouse.contains(identifier)) {
+                newState.knownInHouse.remove(identifier);
+            } else {
+                if (newState.unknownsInHouse > 0) {
+                    newState.unknownsInHouse--;
+                }
+            }
+            newStates.add(newState);
+        }
+
+        private void sendKnownIn(int identifier, Set<State> newStates, State state) {
+            State newState = new State(state);
+            newState.knownOutHouse.remove(identifier);
+            newState.toComeIn.remove(identifier);
+            newState.knownInHouse.add(identifier);
+            newStates.add(newState);
+        }
+
+        // Generate a map saying for movement n, what the next usage of that identifier is.
+        // >= 1000000 means never used again. Use different values so that the values are
+        // unique (and thus can be keys in maps, etc.)
+        private static int[] nextUsages(Movement[] movements) {
+            int[] result = new int[movements.length];
+            for (int i = 0; i < movements.length; i++) {
+                result[i] = 1000000 + i;
+            }
+
+            Map<Integer, Integer> lastUsages = new HashMap<Integer, Integer>();
+            for (int i = 0; i < movements.length; i++) {
+                Movement movement = movements[i];
+                if (movement.identifier != 0) {
+                    Integer lastUsage = lastUsages.get(movement.identifier);
+                    if (lastUsage != null) {
+                        result[lastUsage] = i;
+                    }
+                    lastUsages.put(movement.identifier, i);
+                }
+            }
+
+            System.err.print("Next uses: ");
+            for (int item : result) {
+                System.err.print(item + " ");
+            }
+            System.err.println("");
+
+            return result;
+        }
     }
 
-    class State {
+    static class State {
         public int unknownsInHouse;
         public Set<Integer> knownInHouse;
         public Set<Integer> knownOutHouse;
