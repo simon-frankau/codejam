@@ -81,7 +81,10 @@ public class C_CrimeHouse extends CodeJamBase {
                 }
 
                 states = doMovement(states, i);
-                System.err.println(states);
+
+                states = eliminateDominated(states);
+
+                // System.err.println(states);
                 System.err.println(i + " (" + states.size() + ")");
             }
 
@@ -250,6 +253,41 @@ public class C_CrimeHouse extends CodeJamBase {
             // System.err.println("");
 
             return result;
+        }
+
+        private Set<State> eliminateDominated(Set<State> states) {
+            Set<State> result = new HashSet<State>();
+            for (State candidate : states) {
+                Iterator<State> iterator = result.iterator();
+                boolean isCandidateDominated = false;
+                while (iterator.hasNext()) {
+                    State existing = iterator.next();
+                    int comparison = checkDomination(existing, candidate);
+                    if (comparison < 0) {
+                        iterator.remove();
+                    } else if (comparison > 0) {
+                        isCandidateDominated = true;
+                        break;
+                    }
+                }
+                if (!isCandidateDominated) {
+                    result.add(candidate);
+                }
+            }
+            return result;
+        }
+
+        // Simple domination check we were doing before...
+        private int checkDomination(State existing, State candidate) {
+            if (!existing.knownInHouse.equals(candidate.knownInHouse)) {
+                return 0;
+            }
+
+            if (!existing.knownOutHouse.equals(candidate.knownOutHouse)) {
+                return 0;
+            }
+
+            return candidate.unknownsInHouse - existing.unknownsInHouse;
         }
     }
 
