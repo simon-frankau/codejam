@@ -138,12 +138,8 @@ public class C_CrimeHouse extends CodeJamBase {
                             newState.unknownsInHouse++;
                             newStates.add(newState);
                         }
-    /* Never helps to assign an identity to someone entering, just for the sake of it...
-                        int p2 = lastEnterer(state.knownOutHouse, i);
-                        if (p2 != 0) {
-                            sendKnownIn(p2, newStates, state);
-                        }
-     */
+                        // Never helps to assign an identity to someone entering, just for the sake of it...
+                        // (cf 'last leaver' case on the leaving branch)
                     }
                 } else {
                     // Leaving
@@ -169,35 +165,18 @@ public class C_CrimeHouse extends CodeJamBase {
                             sendKnownOut(p1, newStates, newState2);
                         }
 
-                        int p2 = lastLeaver(state.knownInHouse, i);
-                        if (p2 != 0) {
-                            sendKnownOut(p2, newStates, state);
+                        // Find last leaver, and send them out.
+                        if (!state.spares.isEmpty()) {
+                            State newState2 = new State(state);
+                            int nextTime = state.spares.firstKey();
+                            int p2 = state.spares.get(nextTime);
+                            newState2.spares.remove(nextTime);
+                            sendKnownOut(p2, newStates, newState2);
                         }
                     }
                 }
             }
             return newStates;
-        }
-
-        private int lastLeaver(Set<Integer> knownInHouse, int i) {
-            Set<Integer> candidates = new HashSet<Integer>(knownInHouse);
-            int candidate = 0;
-            while (++i < movements.length) {
-                Movement movement = movements[i];
-                if (movement.identifier != 0) {
-                    if (!movement.isEnter && candidates.contains(movement.identifier)) {
-                        candidate = movement.identifier;
-                    }
-                    candidates.remove(movement.identifier);
-                }
-            }
-
-            // Never leaves counts as a last leaver.
-            if (!candidates.isEmpty()) {
-                return candidates.iterator().next();
-            }
-
-            return candidate;
         }
 
         private void sendKnownOut(int identifier, Set<State> newStates, State state) {
@@ -232,7 +211,11 @@ public class C_CrimeHouse extends CodeJamBase {
                 Movement nextMovement = movements[nextUse];
                 if (nextMovement.isEnter) {
                     newState.toComeOut.put(nextUse, identifier);
+                } else {
+                    newState.spares.put(-nextUse, identifier);
                 }
+            } else {
+                newState.spares.put(-nextUse, identifier);
             }
 
             newState.knownOutHouse.remove(identifier);
@@ -274,8 +257,13 @@ public class C_CrimeHouse extends CodeJamBase {
         public int unknownsInHouse;
         public Set<Integer> knownInHouse;
         public Set<Integer> knownOutHouse;
-        public SortedMap<Integer, Integer> toComeIn; // Subset of knownOutHouse that must be brought in, keyed on entry time.
-        public SortedMap<Integer, Integer> toComeOut; // Symmetrically for knownInHouse
+        // Subset of knownOutHouse that must be brought in, keyed on entry time.
+        public SortedMap<Integer, Integer> toComeIn;
+        // Symmetrically for knownInHouse
+        public SortedMap<Integer, Integer> toComeOut;
+        // Those that are known in, and will go out later, but are 'loanable' as an identity for unknowns
+        // (reducing the unknowns in the house at the end). Keyed on minus the time to reverse sort.
+        public SortedMap<Integer, Integer> spares;
 
         State() {
             this.unknownsInHouse = 0;
@@ -283,6 +271,7 @@ public class C_CrimeHouse extends CodeJamBase {
             this.knownOutHouse = new HashSet<Integer>();
             this.toComeIn = new TreeMap<Integer, Integer>();
             this.toComeOut = new TreeMap<Integer, Integer>();
+            this.spares = new TreeMap<Integer, Integer>();
         }
 
         State(State that) {
@@ -291,6 +280,7 @@ public class C_CrimeHouse extends CodeJamBase {
             this.knownOutHouse = new HashSet<Integer>(that.knownOutHouse);
             this.toComeIn = new TreeMap<Integer, Integer>(that.toComeIn);
             this.toComeOut = new TreeMap<Integer, Integer>(that.toComeOut);
+            this.spares = new TreeMap<Integer, Integer>(that.spares);
         }
 
         @Override
@@ -305,6 +295,7 @@ public class C_CrimeHouse extends CodeJamBase {
             if (!knownOutHouse.equals(state.knownOutHouse)) return false;
             if (!toComeIn.equals(state.toComeIn)) return false;
             if (!toComeOut.equals(state.toComeOut)) return false;
+            if (!spares.equals(state.spares)) return false;
 
             return true;
         }
@@ -316,6 +307,7 @@ public class C_CrimeHouse extends CodeJamBase {
             result = 31 * result + knownOutHouse.hashCode();
             result = 31 * result + toComeIn.hashCode();
             result = 31 * result + toComeOut.hashCode();
+            result = 31 * result + spares.hashCode();
             return result;
         }
 
@@ -327,6 +319,7 @@ public class C_CrimeHouse extends CodeJamBase {
                     ", knownOutHouse=" + knownOutHouse +
                     ", toComeIn=" + toComeIn +
                     ", toComeOut=" + toComeOut +
+                    ", spares=" + spares +
                     '}';
         }
     }
