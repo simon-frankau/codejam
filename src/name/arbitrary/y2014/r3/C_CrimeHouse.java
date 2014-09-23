@@ -4,8 +4,6 @@ import name.arbitrary.CodeJamBase;
 
 import java.util.*;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
-
 // To calculate the final score, we run through the timesteps, arbitrarily starting with 0 unknown occupants in the
 // house (we allow negative counts). The final number of unknown occupants minus the minimum number of unknown
 // occupants at any time is the number of unknown occupants at the end. To this we add the number of known occupants
@@ -61,13 +59,15 @@ public class C_CrimeHouse extends CodeJamBase {
 
     // Run through possible statuses we can be in.
     private String simpleRun(List<Movement> movements) {
+        int[] nextUses = nextUsages(movements);
+
         Set<State> states = new HashSet<State>();
         states.add(new State());
 
         int i = 0;
         for (Movement movement : movements) {
-            states = doMovement(states, movements, i);
-            // System.err.println(states);
+            states = doMovement(states, nextUses, movements, i);
+            System.err.println(states);
             System.err.println(i++ + " (" + states.size() + ")");
         }
 
@@ -93,7 +93,7 @@ public class C_CrimeHouse extends CodeJamBase {
     // Just going from \... to ... is also possibly useful, as it removes a known person from the house at the end.
     //
     // We never want to convert /...\ to ..., since that can make the final occupancy count worse.
-    private Set<State> doMovement(Set<State> states, List<Movement> movements, int i) {
+    private Set<State> doMovement(Set<State> states, int[] nextUses, List<Movement> movements, int i) {
         Movement movement = movements.get(i);
         Set<State> newStates = new HashSet<State>();
         for (State state : states) {
@@ -108,7 +108,7 @@ public class C_CrimeHouse extends CodeJamBase {
                     // Unknown person entering. Could be a new person, or one of the ones we know are out.
 
                     // Choose someone who's out and needs to go out again, if there is one.
-                    int p1 = earliestLeaver(state.knownOutHouse, movements, i);
+                    int p1 = earliestLeaver(state.toComeIn, nextUses, movements, i);
                     if (p1 != 0) {
                         sendKnownIn(p1, newStates, state);
                     } else {
@@ -130,9 +130,9 @@ public class C_CrimeHouse extends CodeJamBase {
             } else {
                 // Leaving
                 if (movement.identifier != 0) {
-                    // Known person leaving
+                    // Known person leaving (if already out of the house, it's a CRIME TIME state).
                     if (!state.knownOutHouse.contains(movement.identifier)) {
-                        sendKnownOut(movement.identifier, newStates, state);
+                        sendKnownOut(movement.identifier, newStates, state, i, nextUses, movements);
                     }
                 } else {
                     // Unknown person leaving. Could be a new person, or one of the ones we know are in.
@@ -144,12 +144,12 @@ public class C_CrimeHouse extends CodeJamBase {
 
                     int p1 = earliestEnterer(state.knownInHouse, movements, i);
                     if (p1 != 0) {
-                        sendKnownOut(p1, newStates, state);
+                        sendKnownOut(p1, newStates, state, i, nextUses, movements);
                     }
 
                     int p2 = lastLeaver(state.knownInHouse, movements, i);
                     if (p2 != 0) {
-                        sendKnownOut(p2, newStates, state);
+                        sendKnownOut(p2, newStates, state, i, nextUses, movements);
                     }
                 }
             }
@@ -157,7 +157,23 @@ public class C_CrimeHouse extends CodeJamBase {
         return newStates;
     }
 
-    private int earliestLeaver(Set<Integer> knownOutHouse, List<Movement> movements, int i) {
+    private int earliestLeaver(Set<Integer> knownOutHouse, int[] nextUses, List<Movement> movements, int i) {
+/*
+        int time = Integer.MAX_VALUE;
+        int result = 0;
+        for (int candidate : knownOutHouse) {
+            int movementNumber = nextUses[candidate];
+            if (movementNumber < 1000000) {
+                Movement movement = movements.get(movementNumber);
+                if (!movement.isEnter && movementNumber < time) {
+                    time = movementNumber;
+                    result = candidate;
+                }
+            }
+        }
+        return result;
+*/
+
         Set<Integer> candidates = new HashSet<Integer>(knownOutHouse);
         while (++i < movements.size()) {
             Movement movement = movements.get(i);
@@ -212,9 +228,20 @@ public class C_CrimeHouse extends CodeJamBase {
         return candidate;
     }
 
-    private void sendKnownOut(int identifier, Set<State> newStates, State state) {
+    private void sendKnownOut(int identifier, Set<State> newStates, State state, int stepNum, int[] nextUses, List<Movement> movements) {
         State newState = new State(state);
         newState.knownOutHouse.add(identifier);
+
+        // TODO: This is broken because the current step may be unassigned and thus not actually have anything
+        // useful for 'nextUse'.
+        int nextUse = nextUses[stepNum];
+        if (nextUse < 1000000) {
+            Movement nextMovement = movements.get(nextUse);
+            if (!nextMovement.isEnter) {
+                newState.toComeIn.add(identifier);
+            }
+        }
+
         if (state.knownInHouse.contains(identifier)) {
             newState.knownInHouse.remove(identifier);
         } else {
@@ -228,25 +255,58 @@ public class C_CrimeHouse extends CodeJamBase {
     private void sendKnownIn(int identifier, Set<State> newStates, State state) {
         State newState = new State(state);
         newState.knownOutHouse.remove(identifier);
+        newState.toComeIn.remove(identifier);
         newState.knownInHouse.add(identifier);
         newStates.add(newState);
+    }
+
+    // Generate a map saying for movement n, what the next usage of that identifier is.
+    // >= 1000000 means never used again. Use different values so that the values are
+    // unique (and thus can be keys in maps, etc.)
+    int[] nextUsages(List<Movement> movements) {
+        int[] result = new int[movements.size()];
+        for (int i = 0; i < movements.size(); i++) {
+            result[i] = 1000000 + i;
+        }
+
+        Map<Integer, Integer> lastUsages = new HashMap<Integer, Integer>();
+        for (int i = 0; i < movements.size(); i++) {
+            Movement movement = movements.get(i);
+            if (movement.identifier != 0) {
+                Integer lastUsage = lastUsages.get(movement.identifier);
+                if (lastUsage != null) {
+                    result[lastUsage] = i;
+                }
+                lastUsages.put(movement.identifier, i);
+            }
+        }
+
+        for (int item : result) {
+            System.err.print(item + " ");
+        }
+        System.err.println("");
+
+        return result;
     }
 
     class State {
         public int unknownsInHouse;
         public Set<Integer> knownInHouse;
         public Set<Integer> knownOutHouse;
+        public Set<Integer> toComeIn; // Subset of knownOutHouse that must be brought in
 
         State() {
             this.unknownsInHouse = 0;
             this.knownInHouse = new HashSet<Integer>();
             this.knownOutHouse = new HashSet<Integer>();
+            this.toComeIn = new HashSet<Integer>();
         }
 
         State(State that) {
             this.unknownsInHouse = that.unknownsInHouse;
             this.knownInHouse = new HashSet<Integer>(that.knownInHouse);
             this.knownOutHouse = new HashSet<Integer>(that.knownOutHouse);
+            this.toComeIn = new HashSet<Integer>(that.toComeIn);
         }
 
         @Override
@@ -259,6 +319,7 @@ public class C_CrimeHouse extends CodeJamBase {
             if (unknownsInHouse != state.unknownsInHouse) return false;
             if (!knownInHouse.equals(state.knownInHouse)) return false;
             if (!knownOutHouse.equals(state.knownOutHouse)) return false;
+            if (!toComeIn.equals(state.toComeIn)) return false;
 
             return true;
         }
@@ -268,6 +329,7 @@ public class C_CrimeHouse extends CodeJamBase {
             int result = unknownsInHouse;
             result = 31 * result + knownInHouse.hashCode();
             result = 31 * result + knownOutHouse.hashCode();
+            result = 31 * result + toComeIn.hashCode();
             return result;
         }
 
@@ -277,6 +339,7 @@ public class C_CrimeHouse extends CodeJamBase {
                     "unknownsInHouse=" + unknownsInHouse +
                     ", knownInHouse=" + knownInHouse +
                     ", knownOutHouse=" + knownOutHouse +
+                    ", toComeIn=" + toComeIn +
                     '}';
         }
     }
