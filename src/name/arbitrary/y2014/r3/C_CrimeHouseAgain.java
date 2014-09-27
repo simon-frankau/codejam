@@ -1,6 +1,7 @@
 package name.arbitrary.y2014.r3;
 
 import com.google.common.collect.Maps;
+import com.sun.tools.javac.util.Pair;
 import name.arbitrary.CodeJamBase;
 
 import java.util.*;
@@ -125,14 +126,16 @@ public class C_CrimeHouseAgain extends CodeJamBase {
                             // (this dominates the alternatives), and never referenced with a lower movement number
                             // counts as best of all.
 
-                            int candidate = furthestEnterCandidate(knownInside, i);
-                            if (candidate != -1) {
-                                // TODO: Check it doesn't make things impossible!
-                                movement.identifier = candidate;
-                                moveKnownPerson(i);
+                            Pair<Integer, Integer> candidate = furthestEnterCandidate(knownInside, i);
+                            int candidateIdentifier = candidate.fst;
+                            int candidateTime = candidate.snd;
+                            if (candidateIdentifier != -1) {
+                                // TODO: If we can't assign exits, and a worse toAssignExit exists, undo it!
+                                if (canAssignExit(candidateIdentifier, candidateTime, i)) {
+                                    movement.identifier = candidateIdentifier;
+                                    moveKnownPerson(i);
+                                }
                             }
-
-                            // FIXME: Find best candidate, replace existing candidate if necessary...
                         }
                     } else {
                         // Assigning exits is unfortunate, because it means we're not getting unknown people out of the house
@@ -156,11 +159,37 @@ public class C_CrimeHouseAgain extends CodeJamBase {
             }
         }
 
+        private boolean canAssignExit(int candidateIdentifier, int candidateTime, int i) {
+            SortedMap<Integer, Integer> toAssign = new TreeMap<Integer, Integer>(toAssignExits);
+            toAssign.put(candidateTime, candidateIdentifier);
+            while (--i >= 0) {
+                if (toAssign.isEmpty()) {
+                    return true;
+                }
+                Movement movement = movements[i];
+                if (movement.identifier == 0 && !movement.isEnter) {
+                    int lastIdx = toAssign.lastKey();
+                    if (lastIdx > i) {
+                        // Should have been assigned by now
+                        return false;
+                    } else {
+                        toAssign.remove(lastIdx);
+                    }
+                }
+            }
+            if (!toAssign.isEmpty() && toAssign.lastKey() >= 0) {
+                // Something remains that should have been assigned.
+                return false;
+            }
+            return true;
+        }
+
         // Find the person who entered the longest time ago (so we can insert an extra leave/enter pair).
-        // Never entering is best of all!
-        private int furthestEnterCandidate(Set<Integer> knownInside, int i) {
+        // Never entering is best of all! Also returns when they entered
+        private Pair<Integer, Integer> furthestEnterCandidate(Set<Integer> knownInside, int i) {
             Set<Integer> candidates = new HashSet<Integer>(knownInside);
             int candidate = -1;
+            int candidateTime = -1;
             while (--i >= 0) {
                 Movement movement = movements[i];
                 if (movement.identifier != 0) {
@@ -168,6 +197,7 @@ public class C_CrimeHouseAgain extends CodeJamBase {
                         if (candidates.contains(movement.identifier)) {
                             candidates.remove(movement.identifier);
                             candidate = movement.identifier;
+                            candidateTime = i;
                         } else {
                             if (candidates.contains(movement.identifier)) {
                                 throw new RuntimeException("CAN'T HAPPEN?!");
@@ -177,9 +207,9 @@ public class C_CrimeHouseAgain extends CodeJamBase {
                 }
             }
             if (!candidates.isEmpty()) {
-                return candidates.iterator().next();
+                return Pair.of(candidates.iterator().next(), -1);
             }
-            return candidate;
+            return Pair.of(candidate, candidateTime);
         }
 
         private void moveKnownPerson(int i) throws CrimeTime {
