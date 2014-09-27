@@ -79,7 +79,8 @@ public class C_CrimeHouseAgain extends CodeJamBase {
 
         private String go() throws CrimeTime {
             assignIdentities();
-
+            assignFinalKnownExits();
+            System.err.println(Arrays.asList(movements));
             return "" + countPeopleInHouse();
         }
 
@@ -124,6 +125,13 @@ public class C_CrimeHouseAgain extends CodeJamBase {
                             // (this dominates the alternatives), and never referenced with a lower movement number
                             // counts as best of all.
 
+                            int candidate = furthestEnterCandidate(knownInside, i);
+                            if (candidate != -1) {
+                                // TODO: Check it doesn't make things impossible!
+                                movement.identifier = candidate;
+                                moveKnownPerson(i);
+                            }
+
                             // FIXME: Find best candidate, replace existing candidate if necessary...
                         }
                     } else {
@@ -146,6 +154,32 @@ public class C_CrimeHouseAgain extends CodeJamBase {
                     }
                 }
             }
+        }
+
+        // Find the person who entered the longest time ago (so we can insert an extra leave/enter pair).
+        // Never entering is best of all!
+        private int furthestEnterCandidate(Set<Integer> knownInside, int i) {
+            Set<Integer> candidates = new HashSet<Integer>(knownInside);
+            int candidate = -1;
+            while (--i >= 0) {
+                Movement movement = movements[i];
+                if (movement.identifier != 0) {
+                    if (movement.isEnter) {
+                        if (candidates.contains(movement.identifier)) {
+                            candidates.remove(movement.identifier);
+                            candidate = movement.identifier;
+                        } else {
+                            if (candidates.contains(movement.identifier)) {
+                                throw new RuntimeException("CAN'T HAPPEN?!");
+                            }
+                        }
+                    }
+                }
+            }
+            if (!candidates.isEmpty()) {
+                return candidates.iterator().next();
+            }
+            return candidate;
         }
 
         private void moveKnownPerson(int i) throws CrimeTime {
@@ -204,5 +238,39 @@ public class C_CrimeHouseAgain extends CodeJamBase {
             return unknownsInHouse + knownsInHouse.size();
         }
 
+        // If there are known people in at the end, we might be able to assign them an unknown exit to reduce the
+        // knowns-in cost.
+        private SortedMap<Integer, Integer> getKnownsInAtEndByEntryTime() {
+            Set<Integer> seen = new HashSet<Integer>();
+            SortedMap<Integer, Integer> result = new TreeMap<Integer, Integer>();
+            seen.add(0);
+            for (int i = movements.length - 1; i >= 0; i--) {
+                Movement movement = movements[i];
+                if (!seen.contains(movement.identifier) && movement.isEnter) {
+                    result.put(i, movement.identifier);
+                }
+                seen.add(movement.identifier);
+            }
+            return result;
+        }
+
+        private void assignFinalKnownExits() {
+            SortedMap<Integer, Integer> knownsInAtEnd = getKnownsInAtEndByEntryTime();
+            // Assign these exits as early as possible, this is optimal.
+            for (int i = 0; i < movements.length; i++) {
+                if (knownsInAtEnd.isEmpty()) {
+                    return;
+                }
+                Movement movement = movements[i];
+                if (movement.identifier == 0 && !movement.isEnter) {
+                    int firstTarget = knownsInAtEnd.firstKey();
+                    if (firstTarget < i) {
+                        // Candidate has already done final movement.
+                        movement.identifier = knownsInAtEnd.get(firstTarget);
+                        knownsInAtEnd.remove(firstTarget);
+                    }
+                }
+            }
+        }
     }
 }
