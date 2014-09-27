@@ -279,15 +279,62 @@ public class C_CrimeHouse extends CodeJamBase {
 
         // Simple domination check we were doing before...
         private int checkDomination(State existing, State candidate) {
-            if (!existing.knownInHouse.equals(candidate.knownInHouse)) {
+            // Sending out people who don't come back in again can improve final state, but not be registered
+            // otherwise...
+            if (existing.knownOutHouse.size() != candidate.knownOutHouse.size()) {
                 return 0;
             }
 
-            if (!existing.knownOutHouse.equals(candidate.knownOutHouse)) {
+            if (existing.toComeOut.size() != candidate.toComeOut.size()) {
                 return 0;
             }
+            if (existing.toComeIn.size() != candidate.toComeIn.size()) {
+                return 0;
+            }
+
+            int test1 = checkDominationSet(existing.toComeIn.keySet(), candidate.toComeIn.keySet());
+            int test2 = checkDominationSet(existing.toComeOut.keySet(), candidate.toComeOut.keySet());
+            int test3 = candidate.unknownsInHouse - existing.unknownsInHouse;
+
+            if (test1 <= 0 && test2 <= 0 && test3 <= 0 && (test1 < 0 || test2 < 0 || test3 < 0)) {
+                return -1;
+            } else if (test1 >= 0 && test2 >= 0 && test3 >= 0 && (test1 > 0 || test2 > 0 || test3 > 0)) {
+                return 1;
+            } else {
+                return 0;
+            }
+
+            /*
+            if (!existing.toComeIn.equals(candidate.toComeIn)) return 0;
+            if (!existing.toComeOut.equals(candidate.toComeOut)) return 0;
 
             return candidate.unknownsInHouse - existing.unknownsInHouse;
+            */
+        }
+
+        private int checkDominationSet(Set<Integer> a, Set<Integer> b) {
+            boolean aNotWorse = true;
+            boolean bNotWorse = true;
+            Iterator<Integer> iterA = a.iterator();
+            Iterator<Integer> iterB = b.iterator();
+            while (iterA.hasNext()) {
+                Integer nextA = iterA.next();
+                Integer nextB = iterB.next();
+
+                if (nextA < nextB) {
+                    aNotWorse = false;
+                } else if (nextA > nextB) {
+                    bNotWorse = false;
+                }
+            }
+
+            if (aNotWorse && !bNotWorse) {
+                return 1;
+            } else if (bNotWorse && !aNotWorse) {
+                return -1;
+            } else {
+                return 0;
+            }
         }
     }
 
