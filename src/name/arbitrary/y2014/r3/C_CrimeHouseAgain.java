@@ -1,6 +1,5 @@
 package name.arbitrary.y2014.r3;
 
-import com.google.common.collect.Maps;
 import com.sun.tools.javac.util.Pair;
 import name.arbitrary.CodeJamBase;
 
@@ -58,11 +57,24 @@ public class C_CrimeHouseAgain extends CodeJamBase {
         try {
             return new Run(movements.toArray(new Movement[movements.size()])).go();
         } catch (CrimeTime e) {
-            return "CRIME TIME";
+            return e.toString();
         }
     }
 
     private static class CrimeTime extends Exception {
+        private final String message;
+
+        CrimeTime() {
+            this("CRIME TIME");
+        }
+
+        CrimeTime(String message) {
+            this.message = message;
+        }
+
+        public String toString() {
+            return message;
+        }
     }
 
     private static class Run {
@@ -73,6 +85,9 @@ public class C_CrimeHouseAgain extends CodeJamBase {
         // Sorted on deadline (time next entry happens).
         private final SortedMap<Integer, Integer> toAssignExits = new TreeMap<Integer, Integer>();
         private final SortedMap<Integer, Integer> toAssignEntries = new TreeMap<Integer, Integer>();
+        // When we assign an entry that means we must assign an exit, it can be undone later to make way for
+        // a better assignment. The key is the deadline, and the value the assigned entry time.
+        private final SortedMap<Integer, Integer> optionalToAssignExits = new TreeMap<Integer, Integer>();
 
         public Run(Movement[] movements) {
             this.movements = movements;
@@ -125,14 +140,23 @@ public class C_CrimeHouseAgain extends CodeJamBase {
                             // We want to choose the person next referenced as exiting in the lowest movement number
                             // (this dominates the alternatives), and never referenced with a lower movement number
                             // counts as best of all.
-
                             Pair<Integer, Integer> candidate = furthestEnterCandidate(knownInside, i);
                             int candidateIdentifier = candidate.fst;
                             int candidateTime = candidate.snd;
+                            // if (nextMovement(candidateIdentifier, i) != candidateTime) {
+                            //     throw new RuntimeException("Can't happen");
+                            // }
                             if (candidateIdentifier != -1) {
-                                // TODO: If we can't assign exits, and a worse toAssignExit exists, undo it!
+                                // Extra paranoia thing. (Debugging this is a nightmare...)
+                                if (!canAssignExit(0, -1, i)) {
+                                    throw new CrimeTime();
+                                }
+
+                                unAssignIfRequired(candidateIdentifier, candidateTime, i);
+
                                 if (canAssignExit(candidateIdentifier, candidateTime, i)) {
                                     movement.identifier = candidateIdentifier;
+                                    optionalToAssignExits.put(candidateTime, i);
                                     moveKnownPerson(i);
                                 }
                             }
@@ -152,7 +176,29 @@ public class C_CrimeHouseAgain extends CodeJamBase {
                             int nearestDeadline = toAssignExits.lastKey();
                             movement.identifier = toAssignExits.get(nearestDeadline);
                             toAssignExits.remove(nearestDeadline);
+                            optionalToAssignExits.remove(nearestDeadline); // May or may not be optional, still works.
                             moveKnownPerson(i);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void unAssignIfRequired(int candidateIdentifier, int candidateTime, int i) throws CrimeTime {
+            if (!canAssignExit(candidateIdentifier, candidateTime, i)) {
+                // Couldn't assign an exit for the current candidate
+                if (!optionalToAssignExits.isEmpty()) {
+                    // There's something else wanting an exit assigned...
+                    int lastDeadline = optionalToAssignExits.lastKey();
+                    if (lastDeadline > candidateTime) {
+                        // But its deadline is sooner...
+                        // So undo the assignment, clearing the space.
+                        movements[optionalToAssignExits.get(lastDeadline)].identifier = 0;
+                        optionalToAssignExits.remove(lastDeadline);
+                        toAssignExits.remove(lastDeadline);
+
+                        if (!canAssignExit(candidateIdentifier, candidateTime, i)) {
+                            throw new RuntimeException("Shouldn't happen");
                         }
                     }
                 }
@@ -174,6 +220,11 @@ public class C_CrimeHouseAgain extends CodeJamBase {
                         return false;
                     } else {
                         toAssign.remove(lastIdx);
+                    }
+                } else if (movement.identifier != 0 && movement.isEnter) {
+                    int prevUse = nextMovement(movement.identifier, i);
+                    if (prevUse >= 0 && movements[prevUse].isEnter) {
+                        toAssign.put(prevUse, movement.identifier);
                     }
                 }
             }
@@ -249,12 +300,22 @@ public class C_CrimeHouseAgain extends CodeJamBase {
 
         private int countPeopleInHouse() {
             Set<Integer> knownsInHouse = new HashSet<Integer>();
+            // Strictly speaking, unnecessary, but good for bug detection:
+            Set<Integer> knownsOutHouse = new HashSet<Integer>();
             int unknownsInHouse = 0;
             for (Movement movement : movements) {
                 if (movement.identifier != 0) {
                     if (movement.isEnter) {
+                        if (knownsInHouse.contains(movement.identifier)) {
+                            throw new RuntimeException("Can't happen");
+                        }
+                        knownsOutHouse.remove(movement.identifier);
                         knownsInHouse.add(movement.identifier);
                     } else {
+                        if (knownsOutHouse.contains(movement.identifier)) {
+                            throw new RuntimeException("Can't happen");
+                        }
+                        knownsOutHouse.remove(movement.identifier);
                         knownsInHouse.remove(movement.identifier);
                     }
                 } else {
