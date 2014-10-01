@@ -345,6 +345,7 @@ public class C_CrimeHouseAgain extends CodeJamBase {
             return result;
         }
 
+        // TODO: See if undoing optional assignments could improve final score...
         private void assignFinalKnownExits() {
             SortedMap<Integer, Integer> knownsInAtEnd = getKnownsInAtEndByEntryTime();
             // Assign these exits as early as possible, this is optimal.
