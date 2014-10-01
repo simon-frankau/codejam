@@ -4,13 +4,13 @@ import name.arbitrary.CodeJamBase;
 
 import java.util.*;
 
-public class C_CrimeHouseAgain2 extends CodeJamBase {
-    C_CrimeHouseAgain2(String fileName) {
+public class C_CrimeHouse extends CodeJamBase {
+    C_CrimeHouse(String fileName) {
         super(fileName);
     }
 
     public static void main(String[] args) {
-        new C_CrimeHouseAgain2(args[0]).run();
+        new C_CrimeHouse(args[0]).run();
     }
 
     class Movement {
